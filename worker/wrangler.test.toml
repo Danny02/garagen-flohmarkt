@@ -1,0 +1,10 @@
+# Wrangler config used exclusively by vitest.
+# KV namespace IDs are dummy values – miniflare creates in-memory storage.
+name = "garagen-flohmarkt-worker-test"
+main = "src/index.ts"
+compatibility_date = "2024-12-30"
+
+[[kv_namespaces]]
+binding    = "GARAGEN_KV"
+id         = "ffffffffffffffffffffffffffffffff"
+preview_id = "ffffffffffffffffffffffffffffffff"

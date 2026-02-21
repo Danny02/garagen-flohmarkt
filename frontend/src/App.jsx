@@ -1,51 +1,12 @@
 import { useState, useEffect, useRef } from "react";
+import {
+  loadMyStands, saveMyStand, updateMyStand, removeMyStand,
+  b64url, b64urlDec,
+} from "./utils.js";
 
 // In production this is set to the Worker URL via VITE_WORKER_URL env var.
 // In local dev the Vite proxy forwards /api/* to wrangler dev (port 8787).
 const API_BASE = import.meta.env.VITE_WORKER_URL ?? "";
-
-// ── LocalStorage ──────────────────────────────────────────────────────────────
-// Stores minimal info so the user can find and edit their stand later.
-const LS_KEY = "gf:myStands";
-
-function loadMyStands() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }
-  catch { return []; }
-}
-
-function saveMyStand(entry) {
-  // entry: { id, editSecret, address, label, credentialId? }
-  const list = loadMyStands().filter((s) => s.id !== entry.id);
-  localStorage.setItem(LS_KEY, JSON.stringify([...list, entry]));
-}
-
-function updateMyStand(id, patch) {
-  const list = loadMyStands().map((s) => s.id === id ? { ...s, ...patch } : s);
-  localStorage.setItem(LS_KEY, JSON.stringify(list));
-}
-
-function removeMyStand(id) {
-  const list = loadMyStands().filter((s) => s.id !== id);
-  localStorage.setItem(LS_KEY, JSON.stringify(list));
-}
-
-// ── Base64url helpers (for WebAuthn) ─────────────────────────────────────────
-
-function b64url(buf) {
-  const bytes = new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer);
-  let str = "";
-  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
-  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-
-function b64urlDec(str) {
-  str = str.replace(/-/g, "+").replace(/_/g, "/");
-  while (str.length % 4) str += "=";
-  const bin = atob(str);
-  const buf = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-  return buf.buffer;
-}
 
 // ── Passkey helpers ───────────────────────────────────────────────────────────
 
