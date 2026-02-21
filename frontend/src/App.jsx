@@ -4,6 +4,141 @@ import { useState, useEffect, useRef } from "react";
 // In local dev the Vite proxy forwards /api/* to wrangler dev (port 8787).
 const API_BASE = import.meta.env.VITE_WORKER_URL ?? "";
 
+// ── LocalStorage ──────────────────────────────────────────────────────────────
+// Stores minimal info so the user can find and edit their stand later.
+const LS_KEY = "gf:myStands";
+
+function loadMyStands() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function saveMyStand(entry) {
+  // entry: { id, editSecret, address, label, credentialId? }
+  const list = loadMyStands().filter((s) => s.id !== entry.id);
+  localStorage.setItem(LS_KEY, JSON.stringify([...list, entry]));
+}
+
+function updateMyStand(id, patch) {
+  const list = loadMyStands().map((s) => s.id === id ? { ...s, ...patch } : s);
+  localStorage.setItem(LS_KEY, JSON.stringify(list));
+}
+
+function removeMyStand(id) {
+  const list = loadMyStands().filter((s) => s.id !== id);
+  localStorage.setItem(LS_KEY, JSON.stringify(list));
+}
+
+// ── Base64url helpers (for WebAuthn) ─────────────────────────────────────────
+
+function b64url(buf) {
+  const bytes = new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer);
+  let str = "";
+  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+function b64urlDec(str) {
+  str = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (str.length % 4) str += "=";
+  const bin = atob(str);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+// ── Passkey helpers ───────────────────────────────────────────────────────────
+
+async function getChallenge() {
+  const res = await fetch(`${API_BASE}/api/webauthn/challenge`, { method: "POST" });
+  if (!res.ok) throw new Error("Could not get challenge");
+  return res.json(); // { challengeId, challenge }
+}
+
+async function registerPasskey(standId, editSecret) {
+  if (!window.PublicKeyCredential) throw new Error("WebAuthn not supported");
+  const { challengeId, challenge } = await getChallenge();
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      challenge: b64urlDec(challenge),
+      rp: { name: "Garagenflohmarkt Zirndorf", id: location.hostname },
+      user: {
+        id: new TextEncoder().encode(standId),
+        name: standId,
+        displayName: "Mein Flohmarktstand",
+      },
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 },  // ES256 (P-256)
+        { type: "public-key", alg: -257 }, // RS256 fallback
+      ],
+      timeout: 60000,
+      attestation: "none",
+      authenticatorSelection: {
+        residentKey: "preferred",
+        userVerification: "preferred",
+      },
+    },
+  });
+  if (!cred) throw new Error("Credential creation cancelled");
+
+  const publicKeySpki = cred.response.getPublicKey?.();
+  if (!publicKeySpki) throw new Error("getPublicKey() not supported – try a newer browser");
+
+  const res = await fetch(`${API_BASE}/api/stands/${standId}/webauthn/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      editSecret,
+      challengeId,
+      credentialId: b64url(cred.rawId),
+      publicKey: b64url(publicKeySpki),
+      clientDataJSON: b64url(cred.response.clientDataJSON),
+    }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error || "Passkey registration failed");
+  }
+  return b64url(cred.rawId); // credentialId to save in localStorage
+}
+
+async function authenticateWithPasskey(credentialId) {
+  if (!window.PublicKeyCredential) throw new Error("WebAuthn not supported");
+  const { challengeId, challenge } = await getChallenge();
+
+  const allowCredentials = credentialId
+    ? [{ type: "public-key", id: b64urlDec(credentialId) }]
+    : [];
+
+  const cred = await navigator.credentials.get({
+    publicKey: {
+      challenge: b64urlDec(challenge),
+      rpId: location.hostname,
+      allowCredentials,
+      userVerification: "preferred",
+      timeout: 60000,
+    },
+  });
+  if (!cred) throw new Error("Authentication cancelled");
+
+  const res = await fetch(`${API_BASE}/api/webauthn/authenticate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      challengeId,
+      credentialId: b64url(cred.rawId),
+      authenticatorData: b64url(cred.response.authenticatorData),
+      clientDataJSON: b64url(cred.response.clientDataJSON),
+      signature: b64url(cred.response.signature),
+    }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error || "Passkey authentication failed");
+  }
+  return res.json(); // { standId, sessionToken }
+}
+
 const STANDS = [
   { id: 1, name: "Familie Mueller", address: "Bahnhofstr. 12", lat: 49.4425, lng: 10.9555, categories: ["Kindersachen", "Spielzeug"], desc: "Kinderkleidung Gr. 92-140, Lego, Playmobil, Kinderbuecher", time: "10:00-16:00", district: "Kernstadt", open: true },
   { id: 2, name: "Schmidt u. Nachbarn", address: "Rothenburger Str. 45", lat: 49.4445, lng: 10.9520, categories: ["Moebel", "Haushalt"], desc: "Regale, Geschirr, Kuechengeraete, Lampen", time: "10:00-15:00", district: "Kernstadt", open: true },
@@ -151,7 +286,46 @@ function Header({ title, subtitle }) {
   );
 }
 
-function HomeScreen({ setScreen, totalStands }) {
+function MyStandsSection({ myStands, onEdit, onPasskeyLogin }) {
+  if (myStands.length === 0) return null;
+  return (
+    <div style={{ margin: "0 16px 0", padding: "16px 18px", background: "#f0f7fa", borderRadius: 14, border: "1.5px solid #b3d4e8" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#1B5E7B", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+        Mein angemeldeter Stand
+      </div>
+      {myStands.map(function (s) {
+        return (
+          <div key={s.id} style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#333", marginBottom: 2 }}>
+              {s.label ? s.label + " · " : ""}{s.address}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              {s.editSecret ? (
+                <button
+                  onClick={function () { onEdit(s, s.editSecret, null); }}
+                  style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#1B5E7B", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Bearbeiten
+                </button>
+              ) : s.credentialId ? (
+                <button
+                  onClick={function () { onPasskeyLogin(s); }}
+                  style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#1B5E7B", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Mit Passkey anmelden
+                </button>
+              ) : (
+                <span style={{ fontSize: 12, color: "#888" }}>Bearbeitungs-Link oeffnen um zu bearbeiten</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HomeScreen({ setScreen, totalStands, myStands, onEditMyStand, onPasskeyLogin }) {
   const steps = [
     { num: "1", title: "Anmelden", text: "Online in 2 Minuten - Adresse eingeben, Kategorien waehlen, fertig." },
     { num: "2", title: "Auf der Karte sichtbar", text: "Dein Stand erscheint automatisch auf der interaktiven Karte." },
@@ -225,6 +399,10 @@ function HomeScreen({ setScreen, totalStands }) {
         >
           Eigenen Stand anmelden
         </button>
+      </div>
+
+      <div style={{ padding: "8px 16px 0" }}>
+        <MyStandsSection myStands={myStands} onEdit={onEditMyStand} onPasskeyLogin={onPasskeyLogin} />
       </div>
 
       <div style={{ padding: "20px 16px 100px" }}>
@@ -400,11 +578,147 @@ function MapScreen({ dynamicStands }) {
   );
 }
 
-function RegisterScreen({ onRegistered }) {
+// ── SuccessScreen (extracted so it can use hooks) ─────────────────────────────
+function SuccessScreen({ result, editLink, copied, setCopied, copyText }) {
+  const [passkeyState, setPasskeyState] = useState("idle"); // idle | loading | done | error
+  const [passkeyError, setPasskeyError] = useState("");
+
+  const supportsPasskeys = !!window.PublicKeyCredential;
+
+  async function handleRegisterPasskey() {
+    setPasskeyState("loading");
+    try {
+      const credentialId = await registerPasskey(result.id, result.editSecret);
+      updateMyStand(result.id, { credentialId });
+      setPasskeyState("done");
+    } catch (e) {
+      setPasskeyError(e.message || "Fehler beim Einrichten des Passkeys");
+      setPasskeyState("error");
+    }
+  }
+
+  return (
+    <div>
+      <Header title="Anmeldung erfolgreich!" subtitle="" />
+      <div style={{ padding: "28px 20px 100px" }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ width: 70, height: 70, borderRadius: 35, background: "#E8F5E9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 14px", color: "#2E7D32", fontWeight: 800 }}>OK</div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1B5E7B", margin: "0 0 8px" }}>Du bist dabei!</h2>
+          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.5 }}>
+            Dein Stand erscheint nach kurzer Pruefung auf der Karte.
+          </p>
+        </div>
+
+        {/* Edit link */}
+        <div style={{ background: "#FFF8E1", border: "1.5px solid #FFD54F", borderRadius: 14, padding: "18px 18px 16px", marginBottom: 16 }}>
+          <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 14, background: "#FFD54F", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800 }}>!</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: "#5D4037" }}>Bearbeitungs-Link sichern</div>
+              <div style={{ fontSize: 13, color: "#795548", marginTop: 3, lineHeight: 1.4 }}>
+                Dein Browser hat diesen Stand bereits gespeichert. Der Link ist dein Backup – z.B. fuer andere Geraete.
+              </div>
+            </div>
+          </div>
+          <div style={{ background: "#fff", border: "1px solid #FFD54F", borderRadius: 10, padding: "10px 12px", fontSize: 12, wordBreak: "break-all", color: "#333", marginBottom: 10, lineHeight: 1.5 }}>
+            {editLink}
+          </div>
+          <button
+            onClick={function () { copyText(editLink); setCopied(true); setTimeout(function () { setCopied(false); }, 2500); }}
+            style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: copied ? "#2E7D32" : "#F9A825", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+          >
+            {copied ? "Link kopiert!" : "Link kopieren"}
+          </button>
+        </div>
+
+        {/* Passkey setup */}
+        {supportsPasskeys && (
+          <div style={{ background: "#f0f7fa", border: "1.5px solid #b3d4e8", borderRadius: 14, padding: "16px 18px", marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#1B5E7B", marginBottom: 6 }}>
+              Passkey einrichten (empfohlen)
+            </div>
+            <div style={{ fontSize: 13, color: "#555", marginBottom: 12, lineHeight: 1.4 }}>
+              Mit einem Passkey kannst du deinen Stand auch auf anderen Geraeten bearbeiten – ohne den Link.
+            </div>
+            {passkeyState === "idle" && (
+              <button onClick={handleRegisterPasskey} style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: "#1B5E7B", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                Passkey jetzt einrichten
+              </button>
+            )}
+            {passkeyState === "loading" && (
+              <div style={{ textAlign: "center", fontSize: 13, color: "#777", padding: "8px 0" }}>Warte auf Geraet…</div>
+            )}
+            {passkeyState === "done" && (
+              <div style={{ textAlign: "center", fontSize: 13, color: "#2E7D32", fontWeight: 600, padding: "8px 0" }}>
+                Passkey eingerichtet!
+              </div>
+            )}
+            {passkeyState === "error" && (
+              <div style={{ fontSize: 12, color: "#c0392b", padding: "4px 0" }}>{passkeyError}</div>
+            )}
+          </div>
+        )}
+
+        {/* Stand summary */}
+        <div style={{ background: "#f5f9fb", borderRadius: 14, padding: "16px 18px", border: "1px solid #e0edf2" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#999", marginBottom: 10, textTransform: "uppercase", letterSpacing: 1 }}>Deine Anmeldung</div>
+          <div style={{ fontSize: 14, color: "#333", lineHeight: 1.8 }}>
+            {(result.label ? result.label + " · " : "") + result.address + ", " + result.plz}
+            <br />
+            {"Uhrzeit: " + result.time_from + " – " + result.time_to + " Uhr"}
+            <br />
+            {result.categories.length > 0 ? "Kategorien: " + result.categories.join(", ") : ""}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function copyText(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).catch(() => {});
+  } else {
+    const el = document.createElement("textarea");
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+  }
+}
+
+/**
+ * RegisterScreen
+ *
+ * Props:
+ *   onRegistered(stand)  – called after a successful POST
+ *   editMode             – null | { id, secret, initialData }
+ *                          When set the form pre-fills and submits a PUT instead
+ */
+function RegisterScreen({ onRegistered, editMode }) {
+  const isEditing = editMode !== null;
+
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ name: "", address: "", plz: "90513", email: "", desc: "", categories: [], time_from: "10:00", time_to: "16:00" });
-  const [submitted, setSubmitted] = useState(false);
+  const [form, setForm] = useState(
+    isEditing && editMode.initialData
+      ? {
+          label:     editMode.initialData.label     || "",
+          address:   editMode.initialData.address   || "",
+          plz:       editMode.initialData.plz       || "90513",
+          district:  editMode.initialData.district  || "Kernstadt",
+          desc:      editMode.initialData.desc      || "",
+          categories: editMode.initialData.categories || [],
+          time_from: editMode.initialData.time_from || "10:00",
+          time_to:   editMode.initialData.time_to   || "16:00",
+        }
+      : { label: "", address: "", plz: "90513", district: "Kernstadt", desc: "", categories: [], time_from: "10:00", time_to: "16:00" }
+  );
+
+  // result state after submit
+  const [result, setResult] = useState(null); // { stand, editSecret } | { stand } (edit)
   const [submitting, setSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   function toggleCat(c) {
     setForm(function (f) {
@@ -425,65 +739,91 @@ function RegisterScreen({ onRegistered }) {
   async function handleSubmit() {
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/stands`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (res.ok) {
-        const newStand = await res.json();
-        onRegistered(newStand);
+      let res;
+      if (isEditing) {
+        const authField = editMode.secret
+          ? { editSecret: editMode.secret }
+          : { sessionToken: editMode.sessionToken };
+        res = await fetch(`${API_BASE}/api/stands/${editMode.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...form, ...authField }),
+        });
+      } else {
+        res = await fetch(`${API_BASE}/api/stands`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
       }
-    } catch (err) {
-      console.error("Registration error:", err);
-      // Still show success – stand will be reviewed manually
+      if (res.ok) {
+        const data = await res.json();
+        setResult(data); // data contains editSecret only on POST
+        onRegistered(data);
+      } else {
+        setResult({ error: true });
+      }
+    } catch (e) {
+      console.error("Submit error:", e);
+      setResult({ error: true });
     } finally {
       setSubmitting(false);
-      setSubmitted(true);
     }
   }
 
-  if (submitted) {
-    return (
-      <div>
-        <Header title="Anmeldung erfolgreich!" subtitle="" />
-        <div style={{ padding: "40px 24px", textAlign: "center" }}>
-          <div style={{ width: 80, height: 80, borderRadius: 40, background: "#E8F5E9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, margin: "0 auto 16px", color: "#2E7D32", fontWeight: 800 }}>
-            OK
-          </div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1B5E7B", margin: "0 0 12px" }}>Du bist dabei!</h2>
-          <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6, margin: "0 0 24px" }}>
-            {"Eine Bestaetigung wurde an "}
-            <strong>{form.email || "deine@email.de"}</strong>
-            {" gesendet. Dein Stand erscheint nach Pruefung auf der Karte."}
-          </p>
-          <div style={{ background: "#f5f9fb", borderRadius: 14, padding: "18px", textAlign: "left", marginBottom: 20, border: "1px solid #e0edf2" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#999", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>Deine Anmeldung</div>
-            <div style={{ fontSize: 14, color: "#333", lineHeight: 1.8 }}>
-              <strong>{form.name || "Max Mustermann"}</strong>
-              <br />
-              {"Standort: " + (form.address || "Musterstr. 1") + ", " + form.plz + " Zirndorf"}
-              <br />
-              {"Uhrzeit: " + form.time_from + " - " + form.time_to + " Uhr"}
-              <br />
-              {"Kategorien: " + (form.categories.length > 0 ? form.categories.join(", ") : "Kindersachen, Buecher")}
-            </div>
+  // ── Success / result screen ─────────────────────────────────────────────────
+  if (result) {
+    if (result.error) {
+      return (
+        <div>
+          <Header title="Fehler" subtitle="" />
+          <div style={{ padding: "40px 24px", textAlign: "center" }}>
+            <p style={{ color: "#c0392b", fontSize: 15 }}>
+              Etwas ist schiefgelaufen. Bitte versuche es erneut oder kontaktiere das Orga-Team.
+            </p>
+            <button onClick={function () { setResult(null); }} style={{ marginTop: 20, padding: "12px 24px", background: "#1B5E7B", color: "#fff", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              Zurueck
+            </button>
           </div>
         </div>
-      </div>
+      );
+    }
+
+    if (isEditing) {
+      return (
+        <div>
+          <Header title="Aenderungen gespeichert" subtitle="" />
+          <div style={{ padding: "40px 24px", textAlign: "center" }}>
+            <div style={{ width: 70, height: 70, borderRadius: 35, background: "#E8F5E9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 16px", color: "#2E7D32", fontWeight: 800 }}>OK</div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1B5E7B", margin: "0 0 10px" }}>Stand aktualisiert!</h2>
+            <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6 }}>
+              Deine Aenderungen wurden gespeichert und erscheinen in Kuerze auf der Karte.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // New registration – show edit link + optional passkey setup
+    const editLink = window.location.origin + "/?edit=" + result.id + "&secret=" + result.editSecret;
+    return (
+      <SuccessScreen
+        result={result}
+        editLink={editLink}
+        copied={copied}
+        setCopied={setCopied}
+        copyText={copyText}
+      />
     );
   }
 
-  const fields = [
-    { label: "Name / Hausgemeinschaft", key: "name", placeholder: "z.B. Familie Mueller" },
-    { label: "Adresse des Stands", key: "address", placeholder: "z.B. Bahnhofstr. 12" },
-    { label: "PLZ", key: "plz", placeholder: "90513" },
-    { label: "E-Mail (fuer Bestaetigung)", key: "email", placeholder: "deine@email.de" },
-  ];
-
+  // ── Form ────────────────────────────────────────────────────────────────────
   return (
     <div>
-      <Header title="Stand anmelden" subtitle={"Schritt " + (step + 1) + " von 3"} />
+      <Header
+        title={isEditing ? "Stand bearbeiten" : "Stand anmelden"}
+        subtitle={"Schritt " + (step + 1) + " von 3"}
+      />
 
       <div style={{ display: "flex", gap: 4, padding: "16px 16px 0" }}>
         {[0, 1, 2].map(function (i) {
@@ -492,26 +832,64 @@ function RegisterScreen({ onRegistered }) {
       </div>
 
       <div style={{ padding: "20px 16px 100px" }}>
+
+        {/* Step 0 – Location */}
         {step === 0 && (
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px", color: "#333" }}>Persoenliche Daten</h3>
-            {fields.map(function (field) {
-              return (
-                <div key={field.key} style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>{field.label}</label>
-                  <input
-                    type="text"
-                    placeholder={field.placeholder}
-                    value={form[field.key]}
-                    onChange={function (e) { updateField(field.key, e.target.value); }}
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, outline: "none", boxSizing: "border-box" }}
-                  />
-                </div>
-              );
-            })}
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 4px", color: "#333" }}>Standort</h3>
+            <p style={{ fontSize: 13, color: "#888", margin: "0 0 18px" }}>Nur die Adresse – kein Name, keine E-Mail.</p>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>Strasse & Hausnummer *</label>
+              <input
+                type="text"
+                placeholder="z.B. Bahnhofstr. 12"
+                value={form.address}
+                onChange={function (e) { updateField("address", e.target.value); }}
+                style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: "0 0 100px" }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>PLZ</label>
+                <input
+                  type="text"
+                  placeholder="90513"
+                  value={form.plz}
+                  onChange={function (e) { updateField("plz", e.target.value); }}
+                  style={{ width: "100%", padding: "12px 10px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>Stadtteil</label>
+                <select
+                  value={form.district}
+                  onChange={function (e) { updateField("district", e.target.value); }}
+                  style={{ width: "100%", padding: "12px 10px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, background: "#fff" }}
+                >
+                  {DISTRICTS.slice(1).map(function (d) { return <option key={d} value={d}>{d}</option>; })}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 4 }}>
+                Bezeichnung <span style={{ fontWeight: 400, color: "#aaa" }}>(optional)</span>
+              </label>
+              <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 6px" }}>z.B. "Gartenflohmarkt" – kein Klarname noetig</p>
+              <input
+                type="text"
+                placeholder="z.B. Gartenflohmarkt, Keller-Troedel…"
+                value={form.label}
+                onChange={function (e) { updateField("label", e.target.value); }}
+                style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
           </div>
         )}
 
+        {/* Step 1 – What's on offer */}
         {step === 1 && (
           <div>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "#333" }}>Was bietest du an?</h3>
@@ -521,7 +899,7 @@ function RegisterScreen({ onRegistered }) {
                 return <Badge key={c} color={CAT_COLORS[c] || "#1B5E7B"} active={form.categories.indexOf(c) >= 0} onClick={function () { toggleCat(c); }}>{c}</Badge>;
               })}
             </div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>Kurze Beschreibung (optional)</label>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>Kurze Beschreibung <span style={{ fontWeight: 400, color: "#aaa" }}>(optional)</span></label>
             <textarea
               placeholder="z.B. Kinderkleidung Gr. 92-140, Playmobil..."
               value={form.desc}
@@ -532,6 +910,7 @@ function RegisterScreen({ onRegistered }) {
           </div>
         )}
 
+        {/* Step 2 – Time */}
         {step === 2 && (
           <div>
             <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "#333" }}>Wann bist du dabei?</h3>
@@ -574,17 +953,13 @@ function RegisterScreen({ onRegistered }) {
             </button>
           )}
           <button
-            disabled={submitting}
+            disabled={submitting || (step === 0 && !form.address.trim())}
             onClick={function () {
-              if (step < 2) {
-                setStep(step + 1);
-              } else {
-                handleSubmit();
-              }
+              if (step < 2) { setStep(step + 1); } else { handleSubmit(); }
             }}
-            style={{ flex: 1, padding: "14px", borderRadius: 12, border: "none", background: submitting ? "#aaa" : "#1B5E7B", color: "#fff", fontSize: 15, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", boxShadow: "0 4px 12px rgba(27,94,123,0.25)" }}
+            style={{ flex: 1, padding: "14px", borderRadius: 12, border: "none", background: (submitting || (step === 0 && !form.address.trim())) ? "#aaa" : "#1B5E7B", color: "#fff", fontSize: 15, fontWeight: 700, cursor: (submitting || (step === 0 && !form.address.trim())) ? "not-allowed" : "pointer", boxShadow: "0 4px 12px rgba(27,94,123,0.25)" }}
           >
-            {submitting ? "Wird gesendet…" : step < 2 ? "Weiter" : "Jetzt anmelden"}
+            {submitting ? "Wird gesendet…" : step < 2 ? "Weiter" : isEditing ? "Aenderungen speichern" : "Jetzt anmelden"}
           </button>
         </div>
       </div>
@@ -686,22 +1061,96 @@ function InfoScreen() {
 export default function App() {
   const [screen, setScreen] = useState("home");
   const [dynamicStands, setDynamicStands] = useState([]);
+  const [myStands, setMyStands] = useState(loadMyStands);
+  // editMode: null | { id, secret, sessionToken, initialData }
+  const [editMode, setEditMode] = useState(null);
+  const [passkeyLoginError, setPasskeyLoginError] = useState("");
   const scrollRef = useRef(null);
 
-  // Load KV-registered stands on mount
+  // 1. Check URL params for an edit link on first load
+  useEffect(function () {
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    const editSecret = params.get("secret");
+    if (editId && editSecret) {
+      fetch(`${API_BASE}/api/stands/${editId}`)
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          // Persist to localStorage so future visits don't need the link
+          saveMyStand({ id: editId, editSecret, address: data?.address || "", label: data?.label });
+          setMyStands(loadMyStands());
+          setEditMode({ id: editId, secret: editSecret, sessionToken: null, initialData: data || {} });
+          setScreen("register");
+          window.history.replaceState({}, "", window.location.pathname);
+        })
+        .catch(function () {
+          setEditMode({ id: editId, secret: editSecret, sessionToken: null, initialData: {} });
+          setScreen("register");
+          window.history.replaceState({}, "", window.location.pathname);
+        });
+    }
+  }, []);
+
+  // 2. Load KV-registered stands on mount
   useEffect(function () {
     fetch(`${API_BASE}/api/stands`)
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (data) { setDynamicStands(Array.isArray(data) ? data : []); })
-      .catch(function () {}); // silent – seed data still shows
+      .catch(function () {});
   }, []);
 
   useEffect(function () {
     if (scrollRef.current) { scrollRef.current.scrollTop = 0; }
   }, [screen]);
 
-  function handleRegistered(newStand) {
-    setDynamicStands(function (prev) { return prev.concat([newStand]); });
+  function handleRegistered(stand) {
+    // Save to localStorage (editSecret is present on first registration)
+    if (stand.editSecret) {
+      saveMyStand({
+        id: stand.id,
+        editSecret: stand.editSecret,
+        address: stand.address,
+        label: stand.label,
+      });
+      setMyStands(loadMyStands());
+    }
+    setDynamicStands(function (prev) {
+      const idx = prev.findIndex(function (s) { return s.id === stand.id; });
+      if (idx >= 0) { const next = prev.slice(); next[idx] = stand; return next; }
+      return prev.concat([stand]);
+    });
+  }
+
+  // Called from "Meine Stände" section when editSecret is in localStorage
+  function handleEditMyStand(localEntry, secret, sessionToken) {
+    fetch(`${API_BASE}/api/stands/${localEntry.id}`)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        setEditMode({ id: localEntry.id, secret, sessionToken, initialData: data || localEntry });
+        setScreen("register");
+      })
+      .catch(function () {
+        setEditMode({ id: localEntry.id, secret, sessionToken, initialData: localEntry });
+        setScreen("register");
+      });
+  }
+
+  // Called from "Mit Passkey anmelden" button
+  async function handlePasskeyLogin(localEntry) {
+    setPasskeyLoginError("");
+    try {
+      const { standId, sessionToken } = await authenticateWithPasskey(localEntry.credentialId);
+      if (standId !== localEntry.id) throw new Error("Passkey is for a different stand");
+      handleEditMyStand(localEntry, null, sessionToken);
+    } catch (e) {
+      setPasskeyLoginError(e.message || "Passkey-Anmeldung fehlgeschlagen");
+    }
+  }
+
+  function handleSetScreen(s) {
+    if (s !== "register") setEditMode(null);
+    setPasskeyLoginError("");
+    setScreen(s);
   }
 
   const totalStands = STANDS.length + dynamicStands.length;
@@ -709,13 +1158,27 @@ export default function App() {
   return (
     <div style={{ maxWidth: 430, margin: "0 auto", minHeight: "100vh", background: "#fafbfc", position: "relative", fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       <style>{"@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap'); * { box-sizing: border-box; margin: 0; } body { background: #e8ecef; margin: 0; } input, select, textarea, button { font-family: inherit; }"}</style>
+      {passkeyLoginError && (
+        <div style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#c0392b", color: "#fff", padding: "12px 16px", fontSize: 13, fontWeight: 600, zIndex: 200, textAlign: "center" }}>
+          {passkeyLoginError}
+          <button onClick={function () { setPasskeyLoginError(""); }} style={{ marginLeft: 12, background: "transparent", border: "none", color: "#fff", fontWeight: 800, cursor: "pointer", fontSize: 16 }}>×</button>
+        </div>
+      )}
       <div ref={scrollRef} style={{ paddingBottom: 68, minHeight: "100vh" }}>
-        {screen === "home"     && <HomeScreen setScreen={setScreen} totalStands={totalStands} />}
+        {screen === "home" && (
+          <HomeScreen
+            setScreen={handleSetScreen}
+            totalStands={totalStands}
+            myStands={myStands}
+            onEditMyStand={handleEditMyStand}
+            onPasskeyLogin={handlePasskeyLogin}
+          />
+        )}
         {screen === "map"      && <MapScreen dynamicStands={dynamicStands} />}
-        {screen === "register" && <RegisterScreen onRegistered={handleRegistered} />}
+        {screen === "register" && <RegisterScreen onRegistered={handleRegistered} editMode={editMode} />}
         {screen === "info"     && <InfoScreen />}
       </div>
-      <NavBar active={screen} setScreen={setScreen} />
+      <NavBar active={screen} setScreen={handleSetScreen} />
     </div>
   );
 }

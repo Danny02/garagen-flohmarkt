@@ -11,6 +11,9 @@ binding  = "GARAGEN_KV"
 id       = "REPLACE_WITH_KV_NAMESPACE_ID"
 preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
 
-# ── Optional: Admin token (set as a Worker secret via wrangler secret put) ───
-# [vars]
-# ADMIN_TOKEN = ""   # set with: wrangler secret put ADMIN_TOKEN
+# ── WebAuthn allowed origins ─────────────────────────────────────────────────
+# Required for passkey support. Set to your production Pages URL (+ localhost for dev).
+# e.g. "https://garagen-flohmarkt.pages.dev,http://localhost:5173"
+# If unset, origin checking is skipped (insecure – dev only).
+[vars]
+ALLOWED_ORIGINS = ""
