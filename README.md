@@ -19,19 +19,7 @@ garagen-flohmarkt/
 
 ## Local development
 
-### 1 – Worker (runs on port 8787)
-
-```bash
-cd worker
-npm install
-# first time only – create a KV namespace:
-npm run kv:create
-npm run kv:create:preview
-# paste the IDs into wrangler.toml, then:
-npm run dev
-```
-
-### 2 – Frontend (runs on port 5173, proxies /api → 8787)
+### 1 – Frontend only (runs on port 5173)
 
 ```bash
 cd frontend
@@ -40,6 +28,36 @@ npm run dev
 ```
 
 Open http://localhost:5173
+
+### 2 – Full app locally (Frontend + Worker)
+
+```bash
+cd worker
+npm install
+npm run dev
+```
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:5173
+
+## Deployment setup (one-time)
+
+Create the production KV namespace once:
+
+```bash
+cd worker
+npm install
+npm run kv:create
+```
+
+Copy the returned namespace ID to:
+- `worker/wrangler.toml` (`id = "REPLACE_WITH_KV_NAMESPACE_ID"`) for manual deploys
+- GitHub secret `CLOUDFLARE_KV_NAMESPACE_ID` for CI deploys
 
 ## API reference
 
@@ -51,6 +69,12 @@ Open http://localhost:5173
 | PUT | `/api/stands/:id` | Update a stand (admin) |
 | DELETE | `/api/stands/:id` | Delete a stand (admin) |
 | GET | `/api/health` | Health check |
+
+## Configuration
+
+- Frontend app content/config is centralized in `frontend/src/appConfig.js` (categories, districts, event details, info page content, registration defaults).
+- Frontend derived constants remain available in `frontend/src/constants.js`.
+- Worker category validation uses `worker/src/config.ts`.
 
 ### Optional admin token
 
@@ -68,8 +92,7 @@ Add these secrets in **Settings → Secrets and variables → Actions**:
 |--------|-------------|
 | `CLOUDFLARE_API_TOKEN` | CF API token (Workers + Pages + KV Edit) |
 | `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID |
-| `CLOUDFLARE_KV_NAMESPACE_ID` | KV namespace ID (production) |
-| `CLOUDFLARE_KV_PREVIEW_ID` | KV namespace preview ID |
+| `CLOUDFLARE_KV_NAMESPACE_ID` | KV namespace ID created by `npm run kv:create` |
 | `WORKER_URL` | Full Worker URL injected into the frontend build |
 
 Push to `main` → CI builds → Worker deploys → Frontend deploys to Cloudflare Pages.

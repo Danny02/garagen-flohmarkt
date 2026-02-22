@@ -1,10 +1,14 @@
 // ── LocalStorage ──────────────────────────────────────────────────────────────
 
 export const LS_KEY = "gf:myStands";
+export const LS_STANDS_CACHE_KEY = "gf:standsCache";
 
 export function loadMyStands() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }
-  catch { return []; }
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+  } catch {
+    return [];
+  }
 }
 
 export function saveMyStand(entry) {
@@ -13,13 +17,31 @@ export function saveMyStand(entry) {
 }
 
 export function updateMyStand(id, patch) {
-  const list = loadMyStands().map((s) => s.id === id ? { ...s, ...patch } : s);
+  const list = loadMyStands().map((s) =>
+    s.id === id ? { ...s, ...patch } : s,
+  );
   localStorage.setItem(LS_KEY, JSON.stringify(list));
 }
 
 export function removeMyStand(id) {
   const list = loadMyStands().filter((s) => s.id !== id);
   localStorage.setItem(LS_KEY, JSON.stringify(list));
+}
+
+export function loadCachedStands() {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(LS_STANDS_CACHE_KEY) || "[]",
+    );
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCachedStands(stands) {
+  if (!Array.isArray(stands)) return;
+  localStorage.setItem(LS_STANDS_CACHE_KEY, JSON.stringify(stands));
 }
 
 // ── Base64url (WebAuthn) ──────────────────────────────────────────────────────

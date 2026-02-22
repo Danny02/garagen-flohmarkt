@@ -3,13 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2024-12-30"
 
 # ── KV Namespace ──────────────────────────────────────────────────────────────
-# Run `npm run kv:create` once to get the IDs, then fill them in below.
 # The GitHub Actions deploy workflow injects CLOUDFLARE_KV_NAMESPACE_ID
-# and CLOUDFLARE_KV_PREVIEW_ID as secrets.
+# as a secret.
 [[kv_namespaces]]
 binding  = "GARAGEN_KV"
-id       = "REPLACE_WITH_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
+id       = "25cb43d0325c4f6e9d07bcd0427c7791"
 
 # ── WebAuthn allowed origins ─────────────────────────────────────────────────
 # Required for passkey support. Set to your production Pages URL (+ localhost for dev).

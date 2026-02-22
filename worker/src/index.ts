@@ -1,225 +1,99 @@
 /**
  * Garagen-Flohmarkt Zirndorf – Cloudflare Worker
- *
- * Auth model
- * ──────────
- *  • POST /api/stands              → creates stand, returns {stand, editSecret} one-time
- *  • PUT  /api/stands/:id          → body: { editSecret } OR { sessionToken }
- *  • DELETE /api/stands/:id        → body: { editSecret } OR { sessionToken }
- *
- * Passkey (WebAuthn) flow
- * ───────────────────────
- *  1. POST /api/webauthn/challenge            → {challengeId, challenge}
- *  2. POST /api/stands/:id/webauthn/register  → register a passkey (requires editSecret)
- *  3. POST /api/webauthn/authenticate         → verify assertion → {standId, sessionToken}
- *
- * KV keys
- * ───────
- *  "stands:index"          → string[]          ordered list of stand IDs
- *  "stand:{id}"            → Stand             full record incl. editSecret
- *  "challenge:{challengeId}" → {challenge, expiresAt}
- *  "credential:{credentialId}" → {standId, publicKey (base64url SPKI)}
- *  "credentialRef:{standId}"   → credentialId  (lookup by stand)
- *  "session:{token}"       → {standId, expiresAt}
  */
 
-export interface Env {
-  GARAGEN_KV: KVNamespace;
-  /**
-   * Comma-separated list of allowed WebAuthn origins.
-   * e.g. "https://garagen-flohmarkt.pages.dev,http://localhost:5173"
-   * If unset, origin checking is skipped (dev-only).
-   */
-  ALLOWED_ORIGINS?: string;
-}
+import { isAuthorized } from "./auth";
+import { b64urlEncode, b64urlDecode } from "./base64url";
+import { CORS, errResponse, jsonResponse } from "./http";
+import { listStandIds, getStand, toPublic } from "./kv";
+import type { Challenge, Env, Session, Stand, StoredCredential } from "./types";
+import { validateStand } from "./validation";
+import { verifyWebAuthnAssertion } from "./webauthn";
 
-// ── Types ────────────────────────────────────────────────────────────────────
+type GeocodeHit = { lat: string; lon: string };
 
-interface Stand {
-  id: string;
-  label?: string;
-  address: string;
-  plz: string;
-  district: string;
-  desc: string;
-  categories: string[];
-  time_from: string;
-  time_to: string;
-  lat?: number;
-  lng?: number;
-  open: boolean;
-  approved: boolean;
-  createdAt: string;
-  editSecret: string; // never returned in GET responses
-}
+const GEOCODER_USER_AGENT = "garagen-flohmarkt-worker/1.0 (+https://garagen-flohmarkt.pages.dev)";
 
-type StandPublic = Omit<Stand, "editSecret">;
-
-interface Challenge {
-  challenge: string; // base64url random bytes
-  expiresAt: number;
-}
-
-interface StoredCredential {
-  standId: string;
-  publicKey: string; // base64url SPKI (DER) encoded
-}
-
-interface Session {
-  standId: string;
-  expiresAt: number;
-}
-
-// ── CORS ─────────────────────────────────────────────────────────────────────
-
-const CORS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json", ...CORS },
+async function fetchGeocodeHit(endpoint: URL, source: string): Promise<GeocodeHit | null> {
+  console.log("[geocode] request", { source, url: endpoint.toString() });
+  const response = await fetch(endpoint.toString(), {
+    headers: {
+      Accept: "application/json",
+      "Accept-Language": "de,en;q=0.8",
+      "User-Agent": GEOCODER_USER_AGENT,
+    },
   });
-}
-function errResponse(message: string, status = 400): Response {
-  return jsonResponse({ error: message }, status);
+  if (!response.ok) {
+    console.log("[geocode] upstream non-ok", {
+      source,
+      status: response.status,
+      statusText: response.statusText,
+    });
+    return null;
+  }
+
+  const hits = (await response.json()) as GeocodeHit[];
+  if (!Array.isArray(hits) || hits.length === 0) {
+    console.log("[geocode] no hits", { source });
+    return null;
+  }
+
+  console.log("[geocode] hit", {
+    source,
+    lat: hits[0].lat,
+    lon: hits[0].lon,
+  });
+  return hits[0];
 }
 
-// ── Base64url helpers ─────────────────────────────────────────────────────────
+async function geocodeStandAddress(address: string, plz: string, district: string): Promise<{ lat: number; lng: number } | null> {
+  const structured = new URL("https://nominatim.openstreetmap.org/search");
+  structured.searchParams.set("format", "jsonv2");
+  structured.searchParams.set("limit", "1");
+  structured.searchParams.set("countrycodes", "de");
+  structured.searchParams.set("street", address);
+  structured.searchParams.set("postalcode", plz);
+  structured.searchParams.set("city", "Zirndorf");
+  structured.searchParams.set("state", "Bayern");
 
-function b64urlEncode(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let str = "";
-  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
-  return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
+  const fallback = new URL("https://nominatim.openstreetmap.org/search");
+  fallback.searchParams.set("format", "jsonv2");
+  fallback.searchParams.set("limit", "1");
+  fallback.searchParams.set("countrycodes", "de");
+  fallback.searchParams.set("q", [address, `${plz} Zirndorf`, district, "Germany"].filter(Boolean).join(", "));
 
-function b64urlDecode(str: string): ArrayBuffer {
-  str = str.replace(/-/g, "+").replace(/_/g, "/");
-  while (str.length % 4) str += "=";
-  const bin = atob(str);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes.buffer;
-}
+  const broadFallback = new URL("https://nominatim.openstreetmap.org/search");
+  broadFallback.searchParams.set("format", "jsonv2");
+  broadFallback.searchParams.set("limit", "1");
+  broadFallback.searchParams.set("countrycodes", "de");
+  broadFallback.searchParams.set("q", [address, `${plz} Zirndorf`, "Germany"].join(", "));
 
-// ── KV helpers ────────────────────────────────────────────────────────────────
-
-async function getIndex(kv: KVNamespace): Promise<string[]> {
-  const raw = await kv.get("stands:index");
-  return raw ? (JSON.parse(raw) as string[]) : [];
-}
-async function setIndex(kv: KVNamespace, ids: string[]): Promise<void> {
-  await kv.put("stands:index", JSON.stringify(ids));
-}
-async function getStand(kv: KVNamespace, id: string): Promise<Stand | null> {
-  return kv.get<Stand>(`stand:${id}`, "json");
-}
-function toPublic(s: Stand): StandPublic {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { editSecret: _s, ...pub } = s;
-  return pub;
-}
-
-// ── Auth helper: editSecret OR sessionToken ───────────────────────────────────
-
-async function isAuthorized(
-  body: Record<string, unknown>,
-  stand: Stand,
-  kv: KVNamespace
-): Promise<boolean> {
-  if (body.editSecret && body.editSecret === stand.editSecret) return true;
-  if (typeof body.sessionToken === "string") {
-    const session = await kv.get<Session>(`session:${body.sessionToken}`, "json");
-    if (session && session.standId === stand.id && session.expiresAt > Date.now()) {
-      return true;
+  try {
+    console.log("[geocode] start", { address, plz, district });
+    const hit =
+      (await fetchGeocodeHit(structured, "structured")) ??
+      (await fetchGeocodeHit(fallback, "fallback")) ??
+      (await fetchGeocodeHit(broadFallback, "broad_fallback"));
+    if (!hit) {
+      console.log("[geocode] no result", { address, plz, district });
+      return null;
     }
+
+    const lat = Number(hit.lat);
+    const lng = Number(hit.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      console.log("[geocode] invalid coordinates", { lat: hit.lat, lon: hit.lon });
+      return null;
+    }
+
+    console.log("[geocode] resolved", { lat, lng });
+    return { lat, lng };
+  } catch (error) {
+    console.log("[geocode] request failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
   }
-  return false;
-}
-
-// ── Validation ────────────────────────────────────────────────────────────────
-
-const ALLOWED_CATEGORIES = [
-  "Kindersachen", "Buecher", "Moebel", "Vintage", "Kleidung",
-  "Haushalt", "Spielzeug", "Garten", "Werkzeug", "Elektronik", "Medien",
-];
-
-function validateStand(body: Partial<Stand>): string | null {
-  if (!body.address?.trim()) return "address is required";
-  if (body.categories) {
-    const invalid = (body.categories as string[]).filter((c) => !ALLOWED_CATEGORIES.includes(c));
-    if (invalid.length > 0) return `unknown categories: ${invalid.join(", ")}`;
-  }
-  return null;
-}
-
-// ── WebAuthn helpers ──────────────────────────────────────────────────────────
-
-async function verifyWebAuthnAssertion(
-  assertion: {
-    credentialId: string;
-    authenticatorData: string;  // base64url
-    clientDataJSON: string;     // base64url
-    signature: string;          // base64url DER-encoded ECDSA
-  },
-  storedPublicKey: string, // base64url SPKI
-  storedChallenge: string, // base64url
-  allowedOrigins: string[] | null
-): Promise<true | string> {
-  // 1. Decode and parse clientDataJSON
-  const clientDataBytes = b64urlDecode(assertion.clientDataJSON);
-  const clientData = JSON.parse(new TextDecoder().decode(clientDataBytes)) as {
-    type: string;
-    challenge: string;
-    origin: string;
-  };
-
-  if (clientData.type !== "webauthn.get") return "clientData.type mismatch";
-  if (clientData.challenge !== storedChallenge) return "challenge mismatch";
-  if (allowedOrigins && !allowedOrigins.includes(clientData.origin)) {
-    return `origin not allowed: ${clientData.origin}`;
-  }
-
-  // 2. Verify RP ID hash (first 32 bytes of authenticatorData)
-  const authDataBytes = new Uint8Array(b64urlDecode(assertion.authenticatorData));
-  const rpId = new URL(clientData.origin).hostname;
-  const expectedRpIdHash = new Uint8Array(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rpId))
-  );
-  for (let i = 0; i < 32; i++) {
-    if (authDataBytes[i] !== expectedRpIdHash[i]) return "rpId hash mismatch";
-  }
-
-  // 3. Check user-present flag (bit 0 of flags byte at index 32)
-  if (!(authDataBytes[32] & 0x01)) return "user not present";
-
-  // 4. Compute verification data: authData || SHA-256(clientDataJSON)
-  const clientDataHash = await crypto.subtle.digest("SHA-256", clientDataBytes);
-  const verifyData = new Uint8Array(authDataBytes.length + 32);
-  verifyData.set(authDataBytes);
-  verifyData.set(new Uint8Array(clientDataHash), authDataBytes.length);
-
-  // 5. Import public key and verify signature
-  const publicKey = await crypto.subtle.importKey(
-    "spki",
-    b64urlDecode(storedPublicKey),
-    { name: "ECDSA", namedCurve: "P-256" },
-    false,
-    ["verify"]
-  );
-
-  const valid = await crypto.subtle.verify(
-    { name: "ECDSA", hash: "SHA-256" },
-    publicKey,
-    b64urlDecode(assertion.signature),
-    verifyData
-  );
-
-  return valid ? true : "signature verification failed";
 }
 
 // ── Worker ────────────────────────────────────────────────────────────────────
@@ -240,7 +114,7 @@ export default {
 
     // ── GET /api/stands ───────────────────────────────────────────────────────
     if (pathname === "/api/stands" && method === "GET") {
-      const ids = await getIndex(env.GARAGEN_KV);
+      const ids = await listStandIds(env.GARAGEN_KV);
       const stands = (
         await Promise.all(ids.map((id) => getStand(env.GARAGEN_KV, id)))
       ).filter((s): s is Stand => s !== null);
@@ -249,27 +123,42 @@ export default {
 
     // ── POST /api/stands ──────────────────────────────────────────────────────
     if (pathname === "/api/stands" && method === "POST") {
-      let body: Partial<Stand>;
+      let body: Partial<Stand> & { editSecret?: string };
       try { body = (await request.json()) as Partial<Stand>; }
       catch { return errResponse("Invalid JSON"); }
 
       const ve = validateStand(body);
       if (ve) return errResponse(ve);
 
+      const address = body.address!.trim();
+      const plz = body.plz?.trim() || "90513";
+      const district = body.district?.trim() || "Kernstadt";
+
+      let lat = body.lat;
+      let lng = body.lng;
+      if (lat == null || lng == null) {
+        const geocoded = await geocodeStandAddress(address, plz, district);
+        if (geocoded) {
+          lat = geocoded.lat;
+          lng = geocoded.lng;
+        }
+      }
+
       const id = crypto.randomUUID();
-      const editSecret = crypto.randomUUID();
+      const providedEditSecret = typeof body.editSecret === "string" ? body.editSecret.trim() : "";
+      const editSecret = providedEditSecret || crypto.randomUUID();
       const stand: Stand = {
         id,
         label: body.label?.trim() || undefined,
-        address: body.address!.trim(),
-        plz: body.plz?.trim() || "90513",
-        district: body.district?.trim() || "Kernstadt",
+        address,
+        plz,
+        district,
         desc: body.desc?.trim() || "",
         categories: body.categories || [],
         time_from: body.time_from || "10:00",
         time_to: body.time_to || "16:00",
-        lat: body.lat,
-        lng: body.lng,
+        lat,
+        lng,
         open: true,
         approved: false,
         createdAt: new Date().toISOString(),
@@ -277,8 +166,6 @@ export default {
       };
 
       await env.GARAGEN_KV.put(`stand:${id}`, JSON.stringify(stand));
-      const ids = await getIndex(env.GARAGEN_KV);
-      await setIndex(env.GARAGEN_KV, [...ids, id]);
 
       // editSecret returned ONCE – client must persist it
       return jsonResponse({ ...toPublic(stand), editSecret }, 201);
@@ -306,18 +193,39 @@ export default {
         }
         const ve = validateStand({ ...existing, ...body });
         if (ve) return errResponse(ve);
+
+        const nextAddress = body.address?.trim() || existing.address;
+        const nextPlz = body.plz?.trim() || existing.plz;
+        const nextDistrict = body.district?.trim() || existing.district;
+
+        let lat = body.lat ?? existing.lat;
+        let lng = body.lng ?? existing.lng;
+
+        const locationChanged =
+          nextAddress !== existing.address ||
+          nextPlz !== existing.plz ||
+          nextDistrict !== existing.district;
+
+        if (locationChanged && (body.lat == null || body.lng == null)) {
+          const geocoded = await geocodeStandAddress(nextAddress, nextPlz, nextDistrict);
+          if (geocoded) {
+            lat = geocoded.lat;
+            lng = geocoded.lng;
+          }
+        }
+
         const updated: Stand = {
           ...existing,
           label: body.label?.trim() ?? existing.label,
-          address: body.address?.trim() || existing.address,
-          plz: body.plz?.trim() || existing.plz,
-          district: body.district?.trim() || existing.district,
+          address: nextAddress,
+          plz: nextPlz,
+          district: nextDistrict,
           desc: body.desc?.trim() ?? existing.desc,
           categories: body.categories || existing.categories,
           time_from: body.time_from || existing.time_from,
           time_to: body.time_to || existing.time_to,
-          lat: body.lat ?? existing.lat,
-          lng: body.lng ?? existing.lng,
+          lat,
+          lng,
           // immutable
           id, editSecret: existing.editSecret, createdAt: existing.createdAt,
           approved: existing.approved,
@@ -328,7 +236,7 @@ export default {
 
       if (method === "DELETE") {
         const existing = await getStand(env.GARAGEN_KV, id);
-        if (!existing) return errResponse("Not found", 404);
+        if (!existing) return jsonResponse({ success: true });
         let body: { editSecret?: string; sessionToken?: string };
         try { body = (await request.json()) as typeof body; }
         catch { return errResponse("Invalid JSON"); }
@@ -336,14 +244,6 @@ export default {
           return errResponse("Forbidden", 403);
         }
         await env.GARAGEN_KV.delete(`stand:${id}`);
-        const ids = await getIndex(env.GARAGEN_KV);
-        await setIndex(env.GARAGEN_KV, ids.filter((i) => i !== id));
-        // Clean up associated credential
-        const credId = await env.GARAGEN_KV.get(`credentialRef:${id}`);
-        if (credId) {
-          await env.GARAGEN_KV.delete(`credential:${credId}`);
-          await env.GARAGEN_KV.delete(`credentialRef:${id}`);
-        }
         return jsonResponse({ success: true });
       }
     }
@@ -360,6 +260,7 @@ export default {
         challengeId?: string;
         credentialId?: string;
         publicKey?: string;    // base64url SPKI
+        algorithm?: number;
         clientDataJSON?: string;
       };
       try { body = (await request.json()) as typeof body; }
@@ -387,9 +288,17 @@ export default {
       }
 
       // Store the credential
-      const credential: StoredCredential = { standId: id, publicKey: body.publicKey };
+      const credential: StoredCredential = {
+        userToken: stand.editSecret,
+        publicKey: body.publicKey,
+        alg: typeof body.algorithm === "number" ? body.algorithm : undefined,
+      };
+      const existingCredentialId = await env.GARAGEN_KV.get(`credentialRef:${stand.editSecret}`);
+      if (existingCredentialId && existingCredentialId !== body.credentialId) {
+        await env.GARAGEN_KV.delete(`credential:${existingCredentialId}`);
+      }
       await env.GARAGEN_KV.put(`credential:${body.credentialId}`, JSON.stringify(credential));
-      await env.GARAGEN_KV.put(`credentialRef:${id}`, body.credentialId);
+      await env.GARAGEN_KV.put(`credentialRef:${stand.editSecret}`, body.credentialId);
       await env.GARAGEN_KV.delete(`challenge:${body.challengeId}`);
 
       return jsonResponse({ ok: true });
@@ -421,7 +330,7 @@ export default {
       catch { return errResponse("Invalid JSON"); }
 
       if (!body.challengeId || !body.credentialId || !body.authenticatorData ||
-          !body.clientDataJSON || !body.signature) {
+        !body.clientDataJSON || !body.signature) {
         return errResponse("Missing fields");
       }
 
@@ -446,6 +355,7 @@ export default {
           signature: body.signature,
         },
         credential.publicKey,
+        credential.alg,
         stored.challenge,
         allowedOrigins
       );
@@ -456,7 +366,20 @@ export default {
 
       // Create session token (30 min TTL)
       const sessionToken = crypto.randomUUID();
+      const sessionUserToken = credential.userToken || "";
+      if (!sessionUserToken && !credential.standId) {
+        return errResponse("Credential is not linked to an owner", 500);
+      }
+
+      let resolvedUserToken = sessionUserToken;
+      if (!resolvedUserToken && credential.standId) {
+        const stand = await getStand(env.GARAGEN_KV, credential.standId);
+        if (!stand) return errResponse("Credential owner not found", 404);
+        resolvedUserToken = stand.editSecret;
+      }
+
       const session: Session = {
+        userToken: resolvedUserToken,
         standId: credential.standId,
         expiresAt: Date.now() + 30 * 60 * 1000,
       };
@@ -464,7 +387,35 @@ export default {
         expirationTtl: 1800,
       });
 
-      return jsonResponse({ standId: credential.standId, sessionToken });
+      return jsonResponse({
+        sessionToken,
+        credentialId: body.credentialId,
+      });
+    }
+
+    // ── POST /api/my/stands ──────────────────────────────────────────────────
+    if (pathname === "/api/my/stands" && method === "POST") {
+      let body: { sessionToken?: string };
+      try { body = (await request.json()) as typeof body; }
+      catch { return errResponse("Invalid JSON"); }
+
+      if (!body.sessionToken) return errResponse("Missing sessionToken");
+
+      const session = await env.GARAGEN_KV.get<Session>(`session:${body.sessionToken}`, "json");
+      if (!session || session.expiresAt <= Date.now()) return errResponse("Forbidden", 403);
+
+      const ids = await listStandIds(env.GARAGEN_KV);
+      const stands = (
+        await Promise.all(ids.map((standId) => getStand(env.GARAGEN_KV, standId)))
+      ).filter((s): s is Stand => s !== null);
+
+      const owned = stands.filter((stand) => {
+        if (session.userToken) return stand.editSecret === session.userToken;
+        if (session.standId) return stand.id === session.standId;
+        return false;
+      });
+
+      return jsonResponse(owned.map(toPublic));
     }
 
     // ── Health check ──────────────────────────────────────────────────────────
