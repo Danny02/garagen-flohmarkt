@@ -56,6 +56,24 @@ export default function App() {
   const [passkeyLoginError, setPasskeyLoginError] = useState("");
   const scrollRef = useRef(null);
 
+  function clearExpiredSessionForStand(standId) {
+    const current = loadMyStands();
+    const entry = current.find(function (s) { return String(s.id) === String(standId); });
+    if (!entry || !entry.sessionToken) return;
+
+    const patched = { ...entry };
+    delete patched.sessionToken;
+    saveMyStand(patched);
+    setMyStands(loadMyStands());
+  }
+
+  function handleSessionExpired(standId) {
+    clearExpiredSessionForStand(standId);
+    setEditMode(null);
+    setScreen("home");
+    setPasskeyLoginError("Passkey-Sitzung abgelaufen. Bitte erneut mit Passkey anmelden.");
+  }
+
   useEffect(function () {
     function handleOnlineStatus() {
       setIsOnline(navigator.onLine);
@@ -167,6 +185,42 @@ export default function App() {
       return;
     }
 
+    if (!secret && sessionToken) {
+      fetch(`${API_BASE}/api/my/stands`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionToken }),
+      })
+        .then(function (r) {
+          if (r.ok) return true;
+          if (r.status === 403) {
+            clearExpiredSessionForStand(localEntry.id);
+            setPasskeyLoginError("Passkey-Sitzung abgelaufen. Bitte erneut mit Passkey anmelden.");
+            return false;
+          }
+          throw new Error("Session validation failed");
+        })
+        .then(function (isValidSession) {
+          if (!isValidSession) return;
+
+          fetch(`${API_BASE}/api/stands/${localEntry.id}`)
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+              setEditMode({ id: localEntry.id, secret, sessionToken, initialData: data || localEntry });
+              setScreen("register");
+            })
+            .catch(function () {
+              const cachedStand = loadCachedStands().find(function (s) { return String(s.id) === String(localEntry.id); });
+              setEditMode({ id: localEntry.id, secret, sessionToken, initialData: cachedStand || localEntry });
+              setScreen("register");
+            });
+        })
+        .catch(function () {
+          setPasskeyLoginError("Passkey-Sitzung konnte nicht geprueft werden. Bitte erneut versuchen.");
+        });
+      return;
+    }
+
     fetch(`${API_BASE}/api/stands/${localEntry.id}`)
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
@@ -203,6 +257,11 @@ export default function App() {
 
     try {
       const { sessionToken } = await authenticateWithPasskey(localEntry.credentialId);
+      saveMyStand({
+        ...localEntry,
+        sessionToken,
+      });
+      setMyStands(loadMyStands());
       handleEditMyStand(localEntry, null, sessionToken);
     } catch (e) {
       setPasskeyLoginError(normalizePasskeyError(e));
@@ -229,12 +288,18 @@ export default function App() {
         throw new Error("Keine Staende fuer diesen Passkey gefunden");
       }
 
+      const existingEntries = loadMyStands();
       ownedStands.forEach(function (stand) {
+        const existingEntry = existingEntries.find(function (entry) {
+          return String(entry.id) === String(stand.id);
+        });
         saveMyStand({
+          ...(existingEntry || {}),
           id: stand.id,
           address: stand.address || "",
           label: stand.label,
           credentialId,
+          sessionToken,
         });
       });
       setMyStands(loadMyStands());
@@ -272,7 +337,13 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(authField),
       });
-      if (!res.ok && res.status !== 404) throw new Error("Loeschen fehlgeschlagen");
+      if (!res.ok && res.status !== 404) {
+        if (!localEntry.editSecret && localEntry.sessionToken && res.status === 403) {
+          clearExpiredSessionForStand(localEntry.id);
+          throw new Error("Passkey-Sitzung abgelaufen. Bitte erneut mit Passkey anmelden.");
+        }
+        throw new Error("Loeschen fehlgeschlagen");
+      }
 
       removeMyStand(localEntry.id);
       setMyStands(loadMyStands());
@@ -342,6 +413,7 @@ export default function App() {
               onRegistered={handleRegistered}
               editMode={editMode}
               createEditSecret={primaryEditSecret}
+              onSessionExpired={handleSessionExpired}
               layout={layout}
             />
           )}

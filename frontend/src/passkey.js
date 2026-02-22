@@ -9,17 +9,21 @@ async function getChallenge() {
   return res.json();
 }
 
-export async function registerPasskey(standId, editSecret) {
+export async function registerPasskey(standId, editSecret, accountName) {
   if (!window.PublicKeyCredential) throw new Error("WebAuthn not supported");
   const { challengeId, challenge } = await getChallenge();
+  const normalizedAccountName =
+    typeof accountName === "string" && accountName.trim().length > 0
+      ? accountName.trim().slice(0, 64)
+      : "Mein Flohmarktstand";
   const cred = await navigator.credentials.create({
     publicKey: {
       challenge: b64urlDec(challenge),
       rp: { name: "Garagenflohmarkt Zirndorf", id: location.hostname },
       user: {
         id: new TextEncoder().encode(standId),
-        name: standId,
-        displayName: "Mein Flohmarktstand",
+        name: normalizedAccountName,
+        displayName: normalizedAccountName,
       },
       pubKeyCredParams: [
         { type: "public-key", alg: -7 },

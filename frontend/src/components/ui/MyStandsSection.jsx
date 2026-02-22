@@ -10,6 +10,8 @@ export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPa
       </div>
       <div style={{ opacity: hasStands ? 1 : 0.62, filter: hasStands ? "none" : "grayscale(1) blur(1.2px)", pointerEvents: hasStands ? "auto" : "none" }}>
         {hasStands ? myStands.map(function (s) {
+          const hasSessionToken = typeof s.sessionToken === "string" && s.sessionToken.length > 0;
+
           return (
             <div key={s.id} style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: "#333", marginBottom: 2 }}>
@@ -20,6 +22,14 @@ export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPa
                   <button
                     disabled={!canWrite}
                     onClick={function () { onEdit(s, s.editSecret, null); }}
+                    style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: canWrite ? "var(--COLOR-1)" : "#bbb", color: "#fff", fontSize: 13, fontWeight: 700, cursor: canWrite ? "pointer" : "not-allowed" }}
+                  >
+                    Bearbeiten
+                  </button>
+                ) : hasSessionToken ? (
+                  <button
+                    disabled={!canWrite}
+                    onClick={function () { onEdit(s, null, s.sessionToken); }}
                     style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: canWrite ? "var(--COLOR-1)" : "#bbb", color: "#fff", fontSize: 13, fontWeight: 700, cursor: canWrite ? "pointer" : "not-allowed" }}
                   >
                     Bearbeiten
@@ -35,7 +45,7 @@ export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPa
                 ) : (
                   <span style={{ fontSize: 12, color: "#888" }}>Bearbeitungs-Link oeffnen um zu bearbeiten</span>
                 )}
-                {(s.editSecret || s.credentialId) && (
+                {(s.editSecret || s.credentialId || hasSessionToken) && (
                   <button
                     disabled={!canWrite}
                     onClick={function () { onDelete(s); }}

@@ -32,9 +32,16 @@ describe("passkey", () => {
         json: async () => ({ ok: true }),
       });
 
-    const credentialId = await registerPasskey("stand-1", "secret-1");
+    const credentialId = await registerPasskey(
+      "stand-1",
+      "secret-1",
+      "Bahnhofstr. 12",
+    );
     expect(typeof credentialId).toBe("string");
     expect(createMock).toHaveBeenCalled();
+    const createArgs = createMock.mock.calls[0][0];
+    expect(createArgs.publicKey.user.name).toBe("Bahnhofstr. 12");
+    expect(createArgs.publicKey.user.displayName).toBe("Bahnhofstr. 12");
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 

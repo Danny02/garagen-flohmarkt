@@ -14,4 +14,4 @@ id       = "25cb43d0325c4f6e9d07bcd0427c7791"
 # e.g. "https://garagen-flohmarkt.pages.dev,http://localhost:5173"
 # If unset, origin checking is skipped (insecure – dev only).
 [vars]
-ALLOWED_ORIGINS = "https://garagen-flohmarkt.pages.dev"
+ALLOWED_ORIGINS = "https://garagen-flohmarkt.pages.dev,http://localhost:5173"

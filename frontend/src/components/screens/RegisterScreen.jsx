@@ -4,7 +4,7 @@ import Header from "../ui/Header.jsx";
 import Badge from "../ui/Badge.jsx";
 import SuccessScreen from "./SuccessScreen.jsx";
 
-export default function RegisterScreen({ onRegistered, editMode, createEditSecret, layout }) {
+export default function RegisterScreen({ onRegistered, editMode, createEditSecret, onSessionExpired, layout }) {
   const isEditing = editMode !== null;
   const [hadExistingEditSecret] = useState(function () {
     return Boolean(createEditSecret);
@@ -72,6 +72,10 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
         setResult(data);
         onRegistered(data);
       } else {
+        if (isEditing && !editMode.secret && editMode.sessionToken && res.status === 403) {
+          onSessionExpired?.(editMode.id);
+          return;
+        }
         setResult({ error: true });
       }
     } catch (e) {

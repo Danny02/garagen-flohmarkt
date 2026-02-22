@@ -76,6 +76,16 @@ Copy the returned namespace ID to:
 - Frontend derived constants remain available in `frontend/src/constants.js`.
 - Worker category validation uses `worker/src/config.ts`.
 
+### Optional GoatCounter analytics
+
+Set this frontend env var to enable GoatCounter:
+
+```bash
+VITE_GOATCOUNTER_ENDPOINT=https://YOUR-CODE.goatcounter.com/count
+```
+
+Create `frontend/.env.local` for local use or configure the same variable in your deployment environment.
+
 ### Optional admin token
 
 ```bash

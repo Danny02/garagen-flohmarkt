@@ -13,7 +13,11 @@ export default function SuccessScreen({ result, editLink, showRecoveryOptions = 
   async function handleRegisterPasskey() {
     setPasskeyState("loading");
     try {
-      const credentialId = await registerPasskey(result.id, result.editSecret);
+      const credentialId = await registerPasskey(
+        result.id,
+        result.editSecret,
+        result.address || result.label || "Mein Flohmarktstand",
+      );
       updateMyStand(result.id, { credentialId });
       setPasskeyState("done");
     } catch (e) {

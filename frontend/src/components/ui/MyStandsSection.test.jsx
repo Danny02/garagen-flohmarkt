@@ -39,4 +39,22 @@ describe("MyStandsSection", () => {
     expect(onEdit).toHaveBeenCalled();
     expect(onDelete).toHaveBeenCalled();
   });
+
+  it("shows edit button for passkey-authenticated stand with session token", async () => {
+    const onEdit = vi.fn();
+    render(
+      <MyStandsSection
+        myStands={[{ id: "1", address: "Testweg 1", credentialId: "cred-1", sessionToken: "sess-1" }]}
+        onEdit={onEdit}
+        onPasskeyLogin={vi.fn()}
+        onPasskeyRecoveryLogin={vi.fn()}
+        onDelete={vi.fn()}
+        canWrite={true}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Mit Passkey anmelden" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Bearbeiten" }));
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "1" }), null, "sess-1");
+  });
 });

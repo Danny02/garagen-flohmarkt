@@ -7,5 +7,8 @@ describe("main bootstrap source", () => {
     expect(source).toContain("createRoot(document.getElementById(\"root\")).render(");
     expect(source).toContain("<StrictMode>");
     expect(source).toContain("<App />");
+    expect(source).toContain("VITE_GOATCOUNTER_ENDPOINT");
+    expect(source).toContain("new URL(goatCounterEndpointRaw)");
+    expect(source).toContain("if (goatCounterEndpoint && typeof document !== \"undefined\")");
   });
 });
