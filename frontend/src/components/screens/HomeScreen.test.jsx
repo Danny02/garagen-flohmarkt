@@ -25,15 +25,15 @@ function renderScreen(overrides = {}) {
 describe("HomeScreen", () => {
   it("renders title and action buttons", () => {
     renderScreen();
-    expect(screen.getByText("Garagenflohmarkt Zirndorf")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Staende auf der Karte entdecken/i })).toBeInTheDocument();
+    expect(screen.getByText("Zirndorfer Garagen-Flohmarkt")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Stände auf der Karte entdecken/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Eigenen Stand anmelden/i })).toBeInTheDocument();
   });
 
   it("navigates to map and register", async () => {
     const setScreen = vi.fn();
     renderScreen({ setScreen });
-    await userEvent.click(screen.getByRole("button", { name: /Staende auf der Karte entdecken/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Stände auf der Karte entdecken/i }));
     await userEvent.click(screen.getByRole("button", { name: /Eigenen Stand anmelden/i }));
     expect(setScreen).toHaveBeenCalledWith("map");
     expect(setScreen).toHaveBeenCalledWith("register");

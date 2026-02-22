@@ -10,10 +10,10 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["assets/branding/logo.png", "assets/branding/logo.webp"],
       manifest: {
-        name: "Garagenflohmarkt Zirndorf",
-        short_name: "Garagenflohmarkt",
+        name: "Zirndorfer Garagen-Flohmarkt",
+        short_name: "Garagen-Flohmarkt",
         description:
-          "Garagenflohmarkt Zirndorf - Staende entdecken und anmelden.",
+          "Zirndorfer Garagen-Flohmarkt - Stände entdecken und anmelden.",
         theme_color: "#10AB48",
         background_color: "#e8ecef",
         display: "standalone",

@@ -7,13 +7,13 @@ describe("Header", () => {
     render(
       <Header
         title="Interaktive Karte"
-        subtitle="8 Staende gefunden"
+        subtitle="8 Stände gefunden"
         layout={{ isDesktop: false }}
       />
     );
 
-    expect(screen.getByRole("img", { name: /Garagenflohmarkt Zirndorf Logo/i })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Zirndorfer Garagen-Flohmarkt Logo/i })).toBeInTheDocument();
     expect(screen.getByText("Interaktive Karte")).toBeInTheDocument();
-    expect(screen.getByText("8 Staende gefunden")).toBeInTheDocument();
+    expect(screen.getByText("8 Stände gefunden")).toBeInTheDocument();
   });
 });

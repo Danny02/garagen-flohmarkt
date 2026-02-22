@@ -1,9 +1,11 @@
+import { t } from "../../i18n.js";
+
 export default function NavBar({ active, setScreen, layout, canWrite }) {
   const items = [
-    { id: "home", label: "Start", sym: "H" },
-    { id: "map", label: "Karte", sym: "K" },
-    { id: "register", label: "Anmelden", sym: "A" },
-    { id: "info", label: "Info", sym: "i" },
+    { id: "home", label: t("nav.home", null, "Start"), sym: "H" },
+    { id: "map", label: t("nav.map", null, "Karte"), sym: "K" },
+    { id: "register", label: t("nav.register", null, "Anmelden"), sym: "A" },
+    { id: "info", label: t("nav.info", null, "Info"), sym: "i" },
   ];
 
   if (!layout.isMobile) {

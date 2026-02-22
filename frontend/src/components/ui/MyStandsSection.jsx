@@ -1,4 +1,5 @@
 import { FiTrash2 } from "react-icons/fi";
+import { t } from "../../i18n.js";
 
 export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPasskeyRecoveryLogin, onDelete, canWrite }) {
   const hasStands = myStands.length > 0;
@@ -6,7 +7,7 @@ export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPa
   return (
     <div style={{ margin: "0 16px 0", padding: "16px 18px", background: hasStands ? "#f0f7fa" : "#eceff1", borderRadius: 14, border: "1.5px solid " + (hasStands ? "#b3d4e8" : "#c5cdd3"), position: "relative", overflow: "hidden" }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: hasStands ? "var(--COLOR-1)" : "#7d8790", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
-        Mein angemeldeter Stand
+        {t("mystands.title", null, "Mein angemeldeter Stand")}
       </div>
       <div style={{ opacity: hasStands ? 1 : 0.62, filter: hasStands ? "none" : "grayscale(1) blur(1.2px)", pointerEvents: hasStands ? "auto" : "none" }}>
         {hasStands ? myStands.map(function (s) {
@@ -24,7 +25,7 @@ export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPa
                     onClick={function () { onEdit(s, s.editSecret, null); }}
                     style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: canWrite ? "var(--COLOR-1)" : "#bbb", color: "#fff", fontSize: 13, fontWeight: 700, cursor: canWrite ? "pointer" : "not-allowed" }}
                   >
-                    Bearbeiten
+                    {t("mystands.edit", null, "Bearbeiten")}
                   </button>
                 ) : hasSessionToken ? (
                   <button
@@ -32,7 +33,7 @@ export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPa
                     onClick={function () { onEdit(s, null, s.sessionToken); }}
                     style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: canWrite ? "var(--COLOR-1)" : "#bbb", color: "#fff", fontSize: 13, fontWeight: 700, cursor: canWrite ? "pointer" : "not-allowed" }}
                   >
-                    Bearbeiten
+                    {t("mystands.edit", null, "Bearbeiten")}
                   </button>
                 ) : s.credentialId ? (
                   <button
@@ -40,17 +41,17 @@ export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPa
                     onClick={function () { onPasskeyLogin(s); }}
                     style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: canWrite ? "var(--COLOR-1)" : "#bbb", color: "#fff", fontSize: 13, fontWeight: 700, cursor: canWrite ? "pointer" : "not-allowed" }}
                   >
-                    Mit Passkey anmelden
+                    {t("mystands.passkeyLogin", null, "Mit Passkey anmelden")}
                   </button>
                 ) : (
-                  <span style={{ fontSize: 12, color: "#888" }}>Bearbeitungs-Link oeffnen um zu bearbeiten</span>
+                  <span style={{ fontSize: 12, color: "#888" }}>{t("mystands.editLinkHint", null, "Bearbeitungs-Link öffnen um zu bearbeiten")}</span>
                 )}
                 {(s.editSecret || s.credentialId || hasSessionToken) && (
                   <button
                     disabled={!canWrite}
                     onClick={function () { onDelete(s); }}
-                    aria-label="Stand loeschen"
-                    title="Stand loeschen"
+                    aria-label={t("mystands.delete", null, "Stand löschen")}
+                    title={t("mystands.delete", null, "Stand löschen")}
                     style={{ width: 38, height: 38, borderRadius: 10, border: "1.5px solid " + (canWrite ? "#d66" : "#ccc"), background: "#fff", color: canWrite ? "#c0392b" : "#999", fontSize: 17, fontWeight: 700, cursor: canWrite ? "pointer" : "not-allowed", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                   >
                     <FiTrash2 size={17} aria-hidden="true" />
@@ -61,7 +62,7 @@ export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPa
           );
         }) : (
           <div style={{ minHeight: 92, borderRadius: 10, border: "1px dashed #b8cad8", background: "#e8eff4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#7f8b95", fontWeight: 600 }}>
-            Noch kein Stand auf diesem Geraet gespeichert
+            {t("mystands.none", null, "Noch kein Stand auf diesem Gerät gespeichert")}
           </div>
         )}
       </div>
@@ -73,14 +74,14 @@ export default function MyStandsSection({ myStands, onEdit, onPasskeyLogin, onPa
             onClick={function () { onPasskeyRecoveryLogin(); }}
             style={{ pointerEvents: "auto", padding: "10px 18px", borderRadius: 10, border: "none", background: canWrite ? "var(--COLOR-1)" : "#bbb", color: "#fff", fontSize: 14, fontWeight: 700, cursor: canWrite ? "pointer" : "not-allowed", boxShadow: "0 4px 12px rgba(16,171,72,0.25)" }}
           >
-            Mit Passkey anmelden
+            {t("mystands.passkeyLogin", null, "Mit Passkey anmelden")}
           </button>
         </div>
       )}
 
       {hasStands && !canWrite && (
         <div style={{ marginTop: 6, fontSize: 12, color: "#888" }}>
-          Offline: Bearbeiten und Loeschen sind derzeit deaktiviert.
+          {t("mystands.offlineHint", null, "Offline: Bearbeiten und Löschen sind derzeit deaktiviert.")}
         </div>
       )}
     </div>

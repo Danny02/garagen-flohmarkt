@@ -5,6 +5,7 @@ import { STANDS, CATEGORIES, DISTRICTS, CAT_COLORS, FILTER_ALL_LABEL, MAP_CENTER
 import { getCatIcon } from "../../category.js";
 import Header from "../ui/Header.jsx";
 import Badge from "../ui/Badge.jsx";
+import { t, translateCategory, translateDistrict } from "../../i18n.js";
 
 export default function MapScreen({ dynamicStands, layout }) {
   const [filter, setFilter] = useState(FILTER_ALL_LABEL);
@@ -28,13 +29,13 @@ export default function MapScreen({ dynamicStands, layout }) {
   const allStands = STANDS.concat(dynamicStands);
 
   function standTitle(stand) {
-    return stand.name || stand.label || stand.address || "Stand";
+    return stand.name || stand.label || stand.address || t("map.standFallback", null, "Stand");
   }
 
   function standTime(stand) {
     if (stand.time) return stand.time;
     if (stand.time_from && stand.time_to) return `${stand.time_from}-${stand.time_to}`;
-    return "Zeit folgt";
+    return t("map.timeFallback", null, "Zeit folgt");
   }
 
   function standCategories(stand) {
@@ -82,7 +83,7 @@ export default function MapScreen({ dynamicStands, layout }) {
     if (stand.open === false) {
       return {
         color: "#F44336",
-        label: "Stand geschlossen (Flag)",
+        label: t("map.activity.closed", null, "Stand geschlossen (Flag)"),
       };
     }
 
@@ -90,7 +91,7 @@ export default function MapScreen({ dynamicStands, layout }) {
     if (!window) {
       return {
         color: "#4CAF50",
-        label: "Stand offen",
+        label: t("map.activity.open", null, "Stand offen"),
       };
     }
 
@@ -98,8 +99,8 @@ export default function MapScreen({ dynamicStands, layout }) {
     const isWithinWindow = currentMinutes >= window.from && currentMinutes <= window.to;
 
     return isWithinWindow
-      ? { color: "#4CAF50", label: "Stand offen (im Zeitfenster)" }
-      : { color: "#FF9800", label: "Stand ausserhalb Zeitfenster" };
+      ? { color: "#4CAF50", label: t("map.activity.openInTime", null, "Stand offen (im Zeitfenster)") }
+      : { color: "#FF9800", label: t("map.activity.outsideTime", null, "Stand außerhalb Zeitfenster") };
   }
 
   const filtered = allStands.filter(function (s) {
@@ -237,7 +238,7 @@ export default function MapScreen({ dynamicStands, layout }) {
     if (myLocation) return myLocation;
 
     if (hasRequestedLocation) {
-      setRouteError(geoError || "Aktiviere zuerst deinen Standort.");
+      setRouteError(geoError || t("map.route.enableLocation", null, "Aktiviere zuerst deinen Standort."));
       return null;
     }
 
@@ -251,11 +252,11 @@ export default function MapScreen({ dynamicStands, layout }) {
       return location;
     } catch (error) {
       if (error && error.message === "geo_unavailable") {
-        setGeoError("Standort nicht verfuegbar");
-        setRouteError("Standort nicht verfuegbar");
+        setGeoError(t("map.location.unavailable", null, "Standort nicht verfügbar"));
+        setRouteError(t("map.location.unavailable", null, "Standort nicht verfügbar"));
       } else {
-        setGeoError("Standortzugriff blockiert");
-        setRouteError("Standortzugriff blockiert");
+        setGeoError(t("map.location.blocked", null, "Standortzugriff blockiert"));
+        setRouteError(t("map.location.blocked", null, "Standortzugriff blockiert"));
       }
       return null;
     }
@@ -294,7 +295,7 @@ export default function MapScreen({ dynamicStands, layout }) {
       setRoutePath(leafletPath);
     } catch {
       setRoutePath([]);
-      setRouteError("Keine Gehroute gefunden.");
+      setRouteError(t("map.route.none", null, "Keine Gehroute gefunden."));
     } finally {
       setRouteLoading(false);
     }
@@ -314,7 +315,7 @@ export default function MapScreen({ dynamicStands, layout }) {
   const standsList = (
     <div style={{ padding: layout.isDesktop ? "0 0 12px" : "4px 16px 100px" }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "#999", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
-        {"Alle Staende (" + filtered.length + ")"}
+        {t("map.list.all", { count: filtered.length }, "Alle Stände ({count})")}
       </div>
       {filtered.map(function (s) {
         const isSel = selected !== null && selected.id === s.id;
@@ -345,29 +346,29 @@ export default function MapScreen({ dynamicStands, layout }) {
 
   return (
     <div>
-      <Header title="Interaktive Karte" subtitle={filtered.length + " Staende gefunden"} layout={layout} />
+      <Header title={t("map.header.title", null, "Interaktive Karte")} subtitle={t("map.header.subtitle", { count: filtered.length }, "{count} Stände gefunden")} layout={layout} />
 
       <div style={{ padding: layout.isDesktop ? "14px 22px 0" : "10px 16px 0" }}>
         <button
           onClick={function () { setShowFilters(!showFilters); }}
           style={{ background: showFilters ? "var(--COLOR-1)" : "#f5f5f5", color: showFilters ? "#fff" : "#555", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         >
-          {"Filter " + (showFilters ? "ausblenden" : "anzeigen") + ((filter !== FILTER_ALL_LABEL || districtFilter !== FILTER_ALL_LABEL) ? " (aktiv)" : "")}
+          {t("map.filter.prefix", null, "Filter") + " " + (showFilters ? t("map.filter.toggle.hide", null, "ausblenden") : t("map.filter.toggle.show", null, "anzeigen")) + ((filter !== FILTER_ALL_LABEL || districtFilter !== FILTER_ALL_LABEL) ? " " + t("map.filter.toggle.active", null, "(aktiv)") : "")}
         </button>
       </div>
 
       {showFilters && (
         <div style={{ padding: layout.isDesktop ? "10px 22px 0" : "10px 16px 0" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Kategorie</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>{t("map.filter.category", null, "Kategorie")}</div>
           <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 8 }}>
             {CATEGORIES.map(function (c) {
-              return <Badge key={c} color={CAT_COLORS[c] || "var(--COLOR-1)"} active={filter === c} onClick={function () { setFilter(c); }}>{c}</Badge>;
+              return <Badge key={c} color={CAT_COLORS[c] || "var(--COLOR-1)"} active={filter === c} onClick={function () { setFilter(c); }}>{c === FILTER_ALL_LABEL ? c : translateCategory(c)}</Badge>;
             })}
           </div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Stadtteil</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>{t("map.filter.district", null, "Stadtteil")}</div>
           <div style={{ display: "flex", flexWrap: "wrap" }}>
             {DISTRICTS.map(function (d) {
-              return <Badge key={d} color="#607D8B" active={districtFilter === d} onClick={function () { setDistrictFilter(d); }}>{d}</Badge>;
+              return <Badge key={d} color="#607D8B" active={districtFilter === d} onClick={function () { setDistrictFilter(d); }}>{d === FILTER_ALL_LABEL ? d : translateDistrict(d)}</Badge>;
             })}
           </div>
         </div>
@@ -435,7 +436,7 @@ export default function MapScreen({ dynamicStands, layout }) {
                         fillOpacity: 1,
                       }}
                     >
-                      <Popup>Du bist hier</Popup>
+                      <Popup>{t("map.location.youAreHere", null, "Du bist hier")}</Popup>
                     </CircleMarker>
                   </>
                 )}
@@ -453,14 +454,14 @@ export default function MapScreen({ dynamicStands, layout }) {
             )}
 
             <div style={{ position: "absolute", left: 10, bottom: 10, background: "rgba(255,255,255,0.92)", borderRadius: 8, padding: "6px 10px", fontSize: 10, lineHeight: 1.8, boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }}>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>Legende:</div>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>{t("map.legend.title", null, "Legende:")}</div>
               <div>
                 {MAP_LEGEND_ITEMS.map(function (item) {
-                  return <span key={item.label} style={{ marginRight: 10 }}><span style={{ color: item.color }}>{"o "}</span>{item.label}</span>;
+                  return <span key={item.label} style={{ marginRight: 10 }}><span style={{ color: item.color }}>{"o "}</span>{translateCategory(item.label)}</span>;
                 })}
               </div>
-              <div><span style={{ color: "#1E88E5" }}>{"o "}</span>{"Mein Standort"}</div>
-              <div><span style={{ color: "#1E88E5" }}>{"--- "}</span>{"Gehroute"}</div>
+              <div><span style={{ color: "#1E88E5" }}>{"o "}</span>{t("map.legend.myLocation", null, "Mein Standort")}</div>
+              <div><span style={{ color: "#1E88E5" }}>{"--- "}</span>{t("map.legend.route", null, "Gehroute")}</div>
             </div>
 
             {geoError && (
@@ -475,32 +476,32 @@ export default function MapScreen({ dynamicStands, layout }) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "#333" }}>{standTitle(selected)}</h3>
-                  <div style={{ fontSize: 13, color: "#777" }}>{"Standort: " + selected.address}</div>
+                  <div style={{ fontSize: 13, color: "#777" }}>{t("map.location.label", { address: selected.address }, "Standort: {address}")}</div>
                 </div>
                 <div style={{ padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700, background: selected.open ? "#E8F5E9" : "#FFF3E0", color: selected.open ? "#2E7D32" : "#E65100" }}>
-                  {selected.open ? "Geoeffnet" : "Geschlossen"}
+                  {selected.open ? t("map.status.open", null, "Geöffnet") : t("map.status.closed", null, "Geschlossen")}
                 </div>
               </div>
               <div style={{ fontSize: 13, color: "#555", marginTop: 10, lineHeight: 1.5 }}>{selected.desc}</div>
               <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                 {standCategories(selected).map(function (c) {
                   const col = CAT_COLORS[c] || "var(--COLOR-1)";
-                  return <span key={c} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: col + "20", color: col }}>{c}</span>;
+                  return <span key={c} style={{ padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: col + "20", color: col }}>{translateCategory(c)}</span>;
                 })}
               </div>
-              <div style={{ fontSize: 12, color: "#999", marginTop: 10 }}>{"Uhrzeit: " + standTime(selected) + " | " + selected.district}</div>
+              <div style={{ fontSize: 12, color: "#999", marginTop: 10 }}>{t("map.time.label", { time: standTime(selected), district: translateDistrict(selected.district) }, "Uhrzeit: {time} | {district}")}</div>
               <button
                 onClick={showWalkingRouteToSelected}
                 disabled={routeLoading}
                 style={{ width: "100%", marginTop: 12, padding: "10px", border: "1.5px solid var(--COLOR-1)", borderRadius: 10, background: "transparent", color: "var(--COLOR-1)", fontSize: 13, fontWeight: 700, cursor: routeLoading ? "not-allowed" : "pointer", opacity: routeLoading ? 0.6 : 1 }}
               >
-                {routeLoading ? "Route wird berechnet..." : "Route hierhin"}
+                {routeLoading ? t("map.route.loading", null, "Route wird berechnet...") : t("map.route.button", null, "Route hierhin")}
               </button>
               <button
                 onClick={function () { openInNavigationTool(selected); }}
                 style={{ width: "100%", marginTop: 8, padding: "10px", border: "1px solid #e0e0e0", borderRadius: 10, background: "#fff", color: "#555", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
               >
-                Navigation oeffnen
+                {t("map.navigation.open", null, "Navigation öffnen")}
               </button>
               {routeError && (
                 <div style={{ marginTop: 8, fontSize: 12, color: "#777" }}>{routeError}</div>

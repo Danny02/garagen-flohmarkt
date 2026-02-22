@@ -12,9 +12,9 @@ describe("InfoScreen", () => {
     expect(question).toBeInTheDocument();
 
     await userEvent.click(question);
-    expect(screen.getByText(/keine Genehmigung noetig/i)).toBeInTheDocument();
+    expect(screen.getByText(/keine Genehmigung nötig/i)).toBeInTheDocument();
 
     await userEvent.click(question);
-    expect(screen.queryByText(/keine Genehmigung noetig/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/keine Genehmigung nötig/i)).not.toBeInTheDocument();
   });
 });

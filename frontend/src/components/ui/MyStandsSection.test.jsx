@@ -34,7 +34,7 @@ describe("MyStandsSection", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Bearbeiten" }));
-    await userEvent.click(screen.getByRole("button", { name: "Stand loeschen" }));
+    await userEvent.click(screen.getByRole("button", { name: "Stand löschen" }));
 
     expect(onEdit).toHaveBeenCalled();
     expect(onDelete).toHaveBeenCalled();

@@ -7,6 +7,26 @@ import HomeScreen from "./components/screens/HomeScreen.jsx";
 import MapScreen from "./components/screens/MapScreen.jsx";
 import RegisterScreen from "./components/screens/RegisterScreen.jsx";
 import InfoScreen from "./components/screens/InfoScreen.jsx";
+import { t } from "./i18n.js";
+
+const SCREEN_PATHS = {
+  home: "/",
+  map: "/map",
+  register: "/register",
+  info: "/info",
+};
+
+function getScreenFromPath(pathname) {
+  const normalizedPath = pathname === "/" ? "/" : pathname.replace(/\/+$/, "");
+  const matched = Object.entries(SCREEN_PATHS).find(function ([, path]) {
+    return path === normalizedPath;
+  });
+  return matched ? matched[0] : "home";
+}
+
+function getPathFromScreen(screen) {
+  return SCREEN_PATHS[screen] || SCREEN_PATHS.home;
+}
 
 function getPrimaryEditSecret(entries) {
   const match = entries.find(function (entry) {
@@ -48,13 +68,35 @@ function useViewport() {
 
 export default function App() {
   const layout = useViewport();
-  const [screen, setScreen] = useState("home");
+  const [screen, setScreen] = useState(function () {
+    if (typeof window === "undefined") return "home";
+    return getScreenFromPath(window.location.pathname);
+  });
   const [isOnline, setIsOnline] = useState(typeof window === "undefined" ? true : navigator.onLine);
   const [dynamicStands, setDynamicStands] = useState(loadCachedStands);
   const [myStands, setMyStands] = useState(loadMyStands);
   const [editMode, setEditMode] = useState(null);
   const [passkeyLoginError, setPasskeyLoginError] = useState("");
   const scrollRef = useRef(null);
+  const hasTrackedInitialPageViewRef = useRef(false);
+
+  function navigateToScreen(nextScreen, options = {}) {
+    const replace = Boolean(options.replace);
+    const path = getPathFromScreen(nextScreen);
+
+    setScreen(nextScreen);
+
+    if (typeof window === "undefined") return;
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (currentUrl === path) return;
+
+    if (replace) {
+      window.history.replaceState({}, "", path);
+      return;
+    }
+
+    window.history.pushState({}, "", path);
+  }
 
   function clearExpiredSessionForStand(standId) {
     const current = loadMyStands();
@@ -70,9 +112,23 @@ export default function App() {
   function handleSessionExpired(standId) {
     clearExpiredSessionForStand(standId);
     setEditMode(null);
-    setScreen("home");
-    setPasskeyLoginError("Passkey-Sitzung abgelaufen. Bitte erneut mit Passkey anmelden.");
+    navigateToScreen("home", { replace: true });
+    setPasskeyLoginError(t("app.error.sessionExpired", null, "Passkey-Sitzung abgelaufen. Bitte erneut mit Passkey anmelden."));
   }
+
+  useEffect(function () {
+    function handlePopState() {
+      const nextScreen = getScreenFromPath(window.location.pathname);
+      setScreen(nextScreen);
+      if (nextScreen !== "register") setEditMode(null);
+      setPasskeyLoginError("");
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return function () {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
   useEffect(function () {
     function handleOnlineStatus() {
@@ -91,8 +147,8 @@ export default function App() {
   useEffect(function () {
     if (!isOnline && screen === "register") {
       setEditMode(null);
-      setScreen("home");
-      setPasskeyLoginError("Offline: Anmelden, Bearbeiten und Loeschen sind nur mit Internet moeglich.");
+      navigateToScreen("home", { replace: true });
+      setPasskeyLoginError(t("app.error.offline.editDelete", null, "Offline: Anmelden, Bearbeiten und Löschen sind nur mit Internet möglich."));
     }
   }, [isOnline, screen]);
 
@@ -102,7 +158,7 @@ export default function App() {
     const editSecret = params.get("secret");
     if (editId && editSecret) {
       if (!isOnline) {
-        setPasskeyLoginError("Offline: Bearbeiten ist nur mit Internet moeglich.");
+        setPasskeyLoginError(t("app.error.offline.edit", null, "Offline: Bearbeiten ist nur mit Internet möglich."));
         window.history.replaceState({}, "", window.location.pathname);
         return;
       }
@@ -113,14 +169,12 @@ export default function App() {
           saveMyStand({ id: editId, editSecret, address: data?.address || "", label: data?.label });
           setMyStands(loadMyStands());
           setEditMode({ id: editId, secret: editSecret, sessionToken: null, initialData: data || {} });
-          setScreen("register");
-          window.history.replaceState({}, "", window.location.pathname);
+          navigateToScreen("register", { replace: true });
         })
         .catch(function () {
           const cachedStand = loadCachedStands().find(function (s) { return String(s.id) === String(editId); });
           setEditMode({ id: editId, secret: editSecret, sessionToken: null, initialData: cachedStand || {} });
-          setScreen("register");
-          window.history.replaceState({}, "", window.location.pathname);
+          navigateToScreen("register", { replace: true });
         });
     }
   }, [isOnline]);
@@ -152,6 +206,21 @@ export default function App() {
     if (scrollRef.current) { scrollRef.current.scrollTop = 0; }
   }, [screen]);
 
+  useEffect(function () {
+    if (typeof window === "undefined") return;
+
+    if (!hasTrackedInitialPageViewRef.current) {
+      hasTrackedInitialPageViewRef.current = true;
+      return;
+    }
+
+    if (window.goatcounter && typeof window.goatcounter.count === "function") {
+      window.goatcounter.count({
+        path: window.location.pathname + window.location.search + window.location.hash,
+      });
+    }
+  }, [screen]);
+
   function handleRegistered(stand) {
     const existingMyStand = loadMyStands().find(function (s) { return String(s.id) === String(stand.id); });
     if (stand.editSecret || existingMyStand) {
@@ -181,7 +250,7 @@ export default function App() {
 
   function handleEditMyStand(localEntry, secret, sessionToken) {
     if (!isOnline) {
-      setPasskeyLoginError("Offline: Bearbeiten ist nur mit Internet moeglich.");
+      setPasskeyLoginError(t("app.error.offline.edit", null, "Offline: Bearbeiten ist nur mit Internet möglich."));
       return;
     }
 
@@ -195,7 +264,7 @@ export default function App() {
           if (r.ok) return true;
           if (r.status === 403) {
             clearExpiredSessionForStand(localEntry.id);
-            setPasskeyLoginError("Passkey-Sitzung abgelaufen. Bitte erneut mit Passkey anmelden.");
+            setPasskeyLoginError(t("app.error.sessionExpired", null, "Passkey-Sitzung abgelaufen. Bitte erneut mit Passkey anmelden."));
             return false;
           }
           throw new Error("Session validation failed");
@@ -207,16 +276,16 @@ export default function App() {
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
               setEditMode({ id: localEntry.id, secret, sessionToken, initialData: data || localEntry });
-              setScreen("register");
+              navigateToScreen("register");
             })
             .catch(function () {
               const cachedStand = loadCachedStands().find(function (s) { return String(s.id) === String(localEntry.id); });
               setEditMode({ id: localEntry.id, secret, sessionToken, initialData: cachedStand || localEntry });
-              setScreen("register");
+              navigateToScreen("register");
             });
         })
         .catch(function () {
-          setPasskeyLoginError("Passkey-Sitzung konnte nicht geprueft werden. Bitte erneut versuchen.");
+          setPasskeyLoginError(t("app.error.passkeyCheck", null, "Passkey-Sitzung konnte nicht geprüft werden. Bitte erneut versuchen."));
         });
       return;
     }
@@ -225,25 +294,25 @@ export default function App() {
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         setEditMode({ id: localEntry.id, secret, sessionToken, initialData: data || localEntry });
-        setScreen("register");
+          navigateToScreen("register");
       })
       .catch(function () {
         const cachedStand = loadCachedStands().find(function (s) { return String(s.id) === String(localEntry.id); });
         setEditMode({ id: localEntry.id, secret, sessionToken, initialData: cachedStand || localEntry });
-        setScreen("register");
+          navigateToScreen("register");
       });
   }
 
   function normalizePasskeyError(error) {
     const msg = String(error?.message || "Passkey-Anmeldung fehlgeschlagen");
     if (/Credential not found/i.test(msg)) {
-      return "Passkey nicht gefunden. Bitte nutze dieselbe App-URL wie bei der Einrichtung oder richte den Passkey ueber deinen Bearbeitungs-Link neu ein.";
+      return t("app.error.passkeyNotFound", null, "Passkey nicht gefunden. Bitte nutze dieselbe App-URL wie bei der Einrichtung oder richte den Passkey über deinen Bearbeitungs-Link neu ein.");
     }
     if (/Verification failed/i.test(msg) || /signature verification failed/i.test(msg)) {
-      return "Passkey konnte nicht verifiziert werden. Bitte erneut versuchen; falls es weiter fehlschlaegt, Passkey neu einrichten.";
+      return t("app.error.passkeyVerify", null, "Passkey konnte nicht verifiziert werden. Bitte erneut versuchen; falls es weiter fehlschlägt, Passkey neu einrichten.");
     }
     if (/Challenge expired/i.test(msg)) {
-      return "Anmeldung abgelaufen. Bitte nochmal auf 'Mit Passkey anmelden' tippen.";
+      return t("app.error.challengeExpired", null, "Anmeldung abgelaufen. Bitte nochmal auf 'Mit Passkey anmelden' tippen.");
     }
     return msg;
   }
@@ -251,7 +320,7 @@ export default function App() {
   async function handlePasskeyLogin(localEntry) {
     setPasskeyLoginError("");
     if (!isOnline) {
-      setPasskeyLoginError("Offline: Bearbeiten ist nur mit Internet moeglich.");
+      setPasskeyLoginError(t("app.error.offline.edit", null, "Offline: Bearbeiten ist nur mit Internet möglich."));
       return;
     }
 
@@ -271,7 +340,7 @@ export default function App() {
   async function handlePasskeyRecoveryLogin() {
     setPasskeyLoginError("");
     if (!isOnline) {
-      setPasskeyLoginError("Offline: Bearbeiten ist nur mit Internet moeglich.");
+      setPasskeyLoginError(t("app.error.offline.edit", null, "Offline: Bearbeiten ist nur mit Internet möglich."));
       return;
     }
 
@@ -282,10 +351,10 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionToken }),
       });
-      if (!ownedRes.ok) throw new Error("Eigene Staende konnten nicht geladen werden");
+      if (!ownedRes.ok) throw new Error(t("app.error.ownStandsLoad", null, "Eigene Stände konnten nicht geladen werden"));
       const ownedStands = await ownedRes.json();
       if (!Array.isArray(ownedStands) || ownedStands.length === 0) {
-        throw new Error("Keine Staende fuer diesen Passkey gefunden");
+        throw new Error(t("app.error.noStandsForPasskey", null, "Keine Stände für diesen Passkey gefunden"));
       }
 
       const existingEntries = loadMyStands();
@@ -304,7 +373,7 @@ export default function App() {
       });
       setMyStands(loadMyStands());
       setEditMode(null);
-      setScreen("home");
+      navigateToScreen("home", { replace: true });
     } catch (e) {
       setPasskeyLoginError(normalizePasskeyError(e));
     }
@@ -312,11 +381,11 @@ export default function App() {
 
   async function handleDeleteMyStand(localEntry) {
     if (!isOnline) {
-      setPasskeyLoginError("Offline: Loeschen ist nur mit Internet moeglich.");
+      setPasskeyLoginError(t("app.error.offline.delete", null, "Offline: Löschen ist nur mit Internet möglich."));
       return;
     }
 
-    const confirmed = window.confirm("Stand wirklich loeschen?");
+    const confirmed = window.confirm(t("app.confirm.delete", null, "Stand wirklich löschen?"));
     if (!confirmed) return;
 
     setPasskeyLoginError("");
@@ -329,7 +398,7 @@ export default function App() {
         const { sessionToken } = await authenticateWithPasskey(localEntry.credentialId);
         authField = { sessionToken };
       } else {
-        throw new Error("Kein gueltiger Zugriff fuer Loeschen vorhanden");
+        throw new Error(t("app.error.noValidAccessDelete", null, "Kein gültiger Zugriff für Löschen vorhanden"));
       }
 
       const res = await fetch(`${API_BASE}/api/stands/${localEntry.id}`, {
@@ -340,9 +409,9 @@ export default function App() {
       if (!res.ok && res.status !== 404) {
         if (!localEntry.editSecret && localEntry.sessionToken && res.status === 403) {
           clearExpiredSessionForStand(localEntry.id);
-          throw new Error("Passkey-Sitzung abgelaufen. Bitte erneut mit Passkey anmelden.");
+          throw new Error(t("app.error.sessionExpired", null, "Passkey-Sitzung abgelaufen. Bitte erneut mit Passkey anmelden."));
         }
-        throw new Error("Loeschen fehlgeschlagen");
+        throw new Error(t("app.error.deleteFailed", null, "Löschen fehlgeschlagen"));
       }
 
       removeMyStand(localEntry.id);
@@ -361,14 +430,14 @@ export default function App() {
   function handleSetScreen(nextScreen) {
     if (nextScreen === "register" && !isOnline) {
       setEditMode(null);
-      setPasskeyLoginError("Offline: Anmelden ist nur mit Internet moeglich.");
-      setScreen("home");
+      setPasskeyLoginError(t("app.error.offline.register", null, "Offline: Anmelden ist nur mit Internet möglich."));
+      navigateToScreen("home", { replace: true });
       return;
     }
 
     if (nextScreen !== "register") setEditMode(null);
     setPasskeyLoginError("");
-    setScreen(nextScreen);
+    navigateToScreen(nextScreen);
   }
 
   const totalStands = STANDS.length + dynamicStands.length;
@@ -385,9 +454,13 @@ export default function App() {
           </div>
         )}
 
+        <div style={{ position: "sticky", top: passkeyLoginError ? 48 : 0, zIndex: 160, background: "#FFF8E1", color: "#5D4037", padding: "7px 12px", fontSize: 12, fontWeight: 700, textAlign: "center", borderBottom: "1px solid #F0E0A0" }}>
+          {t("app.preview", null, "Experimenteller Prototyp — keine offizielle Seite der Stadt Zirndorf und nicht die offizielle Seite zur Veranstaltung „Zirndorfer Garagen-Flohmarkt“.")}
+        </div>
+
         {!isOnline && (
           <div style={{ position: "sticky", top: 0, zIndex: 150, background: "#5f6368", color: "#fff", padding: "8px 12px", fontSize: 12, fontWeight: 700, textAlign: "center" }}>
-            Offline-Modus: Lesen verfuegbar, Anmelden/Bearbeiten/Loeschen deaktiviert.
+            {t("app.offlineBanner", null, "Offline-Modus: Lesen verfügbar, Anmelden/Bearbeiten/Löschen deaktiviert.")}
           </div>
         )}
 

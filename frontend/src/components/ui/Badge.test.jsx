@@ -8,11 +8,11 @@ describe("Badge", () => {
     const onClick = vi.fn();
     render(
       <Badge color="#0093FC" active={false} onClick={onClick}>
-        Buecher
+        Bücher
       </Badge>
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Buecher" }));
+    await userEvent.click(screen.getByRole("button", { name: "Bücher" }));
     expect(onClick).toHaveBeenCalled();
   });
 });

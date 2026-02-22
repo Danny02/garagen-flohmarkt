@@ -3,6 +3,7 @@ import { API_BASE, DISTRICTS, STAND_CATEGORIES, CAT_COLORS, EVENT_DATE, REGISTER
 import Header from "../ui/Header.jsx";
 import Badge from "../ui/Badge.jsx";
 import SuccessScreen from "./SuccessScreen.jsx";
+import { t, translateCategory, translateDistrict } from "../../i18n.js";
 
 export default function RegisterScreen({ onRegistered, editMode, createEditSecret, onSessionExpired, layout }) {
   const isEditing = editMode !== null;
@@ -93,10 +94,10 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
           <Header title="Fehler" subtitle="" layout={layout} />
           <div style={{ padding: "40px 24px", textAlign: "center" }}>
             <p style={{ color: "#c0392b", fontSize: 15 }}>
-              Etwas ist schiefgelaufen. Bitte versuche es erneut oder kontaktiere das Orga-Team.
+              {t("register.error.message", null, "Etwas ist schiefgelaufen. Bitte versuche es erneut oder kontaktiere das Orga-Team.")}
             </p>
             <button onClick={function () { setResult(null); }} style={{ marginTop: 20, padding: "12px 24px", background: "var(--COLOR-1)", color: "#fff", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-              Zurueck
+              {t("register.back", null, "Zurück")}
             </button>
           </div>
         </div>
@@ -106,12 +107,12 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
     if (isEditing) {
       return (
         <div>
-          <Header title="Aenderungen gespeichert" subtitle="" layout={layout} />
+          <Header title={t("register.saved.title", null, "Änderungen gespeichert")} subtitle="" layout={layout} />
           <div style={{ padding: "40px 24px", textAlign: "center" }}>
             <div style={{ width: 70, height: 70, borderRadius: 35, background: "#E8F5E9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 16px", color: "#2E7D32", fontWeight: 800 }}>OK</div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--COLOR-1)", margin: "0 0 10px" }}>Stand aktualisiert!</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--COLOR-1)", margin: "0 0 10px" }}>{t("register.saved.subtitle", null, "Stand aktualisiert!")}</h2>
             <p style={{ fontSize: 14, color: "#666", lineHeight: 1.6 }}>
-              Deine Aenderungen wurden gespeichert und erscheinen in Kuerze auf der Karte.
+              {t("register.saved.message", null, "Deine Änderungen wurden gespeichert und erscheinen in Kürze auf der Karte.")}
             </p>
           </div>
         </div>
@@ -134,8 +135,8 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
   return (
     <div>
       <Header
-        title={isEditing ? "Stand bearbeiten" : "Stand anmelden"}
-        subtitle={"Schritt " + (step + 1) + " von 3"}
+        title={isEditing ? t("register.title.edit", null, "Stand bearbeiten") : t("register.title.create", null, "Stand anmelden")}
+        subtitle={t("register.step", { step: step + 1 }, "Schritt {step} von 3")}
         layout={layout}
       />
 
@@ -148,14 +149,14 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
       <div style={{ padding: layout.isMobile ? "20px 16px 100px" : "24px 16px 38px", maxWidth: layout.isDesktop ? 920 : layout.isTablet ? 760 : "100%", margin: "0 auto" }}>
         {step === 0 && (
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 4px", color: "#333" }}>Standort</h3>
-            <p style={{ fontSize: 13, color: "#888", margin: "0 0 18px" }}>Nur die Adresse – kein Name, keine E-Mail.</p>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 4px", color: "#333" }}>{t("register.section.location", null, "Standort")}</h3>
+            <p style={{ fontSize: 13, color: "#888", margin: "0 0 18px" }}>{t("register.location.hint", null, "Nur die Adresse – kein Name, keine E-Mail.")}</p>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>Strasse & Hausnummer *</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>{t("register.address", null, "Straße & Hausnummer *")}</label>
               <input
                 type="text"
-                placeholder="z.B. Bahnhofstr. 12"
+                placeholder={t("register.address.placeholder", null, "z.B. Bahnhofstr. 12")}
                 value={form.address}
                 onChange={function (e) { updateField("address", e.target.value); }}
                 style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, outline: "none", boxSizing: "border-box" }}
@@ -164,7 +165,7 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
 
             <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
               <div style={{ flex: "0 0 100px" }}>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>PLZ</label>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>{t("register.zip", null, "PLZ")}</label>
                 <input
                   type="text"
                   placeholder="90513"
@@ -174,25 +175,25 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>Stadtteil</label>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>{t("register.district", null, "Stadtteil")}</label>
                 <select
                   value={form.district}
                   onChange={function (e) { updateField("district", e.target.value); }}
                   style={{ width: "100%", padding: "12px 10px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, background: "#fff" }}
                 >
-                  {DISTRICTS.slice(1).map(function (d) { return <option key={d} value={d}>{d}</option>; })}
+                  {DISTRICTS.slice(1).map(function (d) { return <option key={d} value={d}>{translateDistrict(d)}</option>; })}
                 </select>
               </div>
             </div>
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 4 }}>
-                Bezeichnung <span style={{ fontWeight: 400, color: "#aaa" }}>(optional)</span>
+                {t("register.label", null, "Bezeichnung")} <span style={{ fontWeight: 400, color: "#aaa" }}>{t("register.optional", null, "(optional)")}</span>
               </label>
-              <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 6px" }}>z.B. "Gartenflohmarkt" – kein Klarname noetig</p>
+              <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 6px" }}>{t("register.label.hint", null, "z.B. \"Gartenflohmarkt\" – kein Klarname nötig")}</p>
               <input
                 type="text"
-                placeholder="z.B. Gartenflohmarkt, Keller-Troedel…"
+                placeholder={t("register.label.placeholder", null, "z.B. Gartenflohmarkt, Keller-Trödel…")}
                 value={form.label}
                 onChange={function (e) { updateField("label", e.target.value); }}
                 style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, outline: "none", boxSizing: "border-box" }}
@@ -203,16 +204,16 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
 
         {step === 1 && (
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "#333" }}>Was bietest du an?</h3>
-            <p style={{ fontSize: 13, color: "#888", margin: "0 0 16px" }}>Waehle passende Kategorien (Mehrfachauswahl)</p>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "#333" }}>{t("register.offer.title", null, "Was bietest du an?")}</h3>
+            <p style={{ fontSize: 13, color: "#888", margin: "0 0 16px" }}>{t("register.offer.hint", null, "Wähle passende Kategorien (Mehrfachauswahl)")}</p>
             <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 20 }}>
               {STAND_CATEGORIES.map(function (c) {
-                return <Badge key={c} color={CAT_COLORS[c] || "var(--COLOR-1)"} active={form.categories.indexOf(c) >= 0} onClick={function () { toggleCat(c); }}>{c}</Badge>;
+                return <Badge key={c} color={CAT_COLORS[c] || "var(--COLOR-1)"} active={form.categories.indexOf(c) >= 0} onClick={function () { toggleCat(c); }}>{translateCategory(c)}</Badge>;
               })}
             </div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>Kurze Beschreibung <span style={{ fontWeight: 400, color: "#aaa" }}>(optional)</span></label>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>{t("register.desc", null, "Kurze Beschreibung")} <span style={{ fontWeight: 400, color: "#aaa" }}>{t("register.optional", null, "(optional)")}</span></label>
             <textarea
-              placeholder="z.B. Kinderkleidung Gr. 92-140, Playmobil..."
+              placeholder={t("register.desc.placeholder", null, "z.B. Kinderkleidung Gr. 92-140, Playmobil...")}
               value={form.desc}
               onChange={function (e) { updateField("desc", e.target.value); }}
               rows={3}
@@ -223,22 +224,22 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
 
         {step === 2 && (
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "#333" }}>Wann bist du dabei?</h3>
-            <p style={{ fontSize: 13, color: "#888", margin: "0 0 16px" }}>{"Der Flohmarkt findet am " + EVENT_DATE + " statt."}</p>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "#333" }}>{t("register.when.title", null, "Wann bist du dabei?")}</h3>
+            <p style={{ fontSize: 13, color: "#888", margin: "0 0 16px" }}>{t("register.when.dateHint", { date: EVENT_DATE }, "Der Flohmarkt findet am {date} statt.")}</p>
             <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>Von</label>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>{t("register.from", null, "Von")}</label>
                 <select value={form.time_from} onChange={function (e) { updateField("time_from", e.target.value); }} style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, background: "#fff" }}>
                   {REGISTER_TIME_OPTIONS_FROM.map(function (time) {
-                    return <option key={time} value={time}>{time + " Uhr"}</option>;
+                    return <option key={time} value={time}>{time + " " + t("register.hour", null, "Uhr")}</option>;
                   })}
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>Bis</label>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 6 }}>{t("register.to", null, "Bis")}</label>
                 <select value={form.time_to} onChange={function (e) { updateField("time_to", e.target.value); }} style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #ddd", fontSize: 15, background: "#fff" }}>
                   {REGISTER_TIME_OPTIONS_TO.map(function (time) {
-                    return <option key={time} value={time}>{time + " Uhr"}</option>;
+                    return <option key={time} value={time}>{time + " " + t("register.hour", null, "Uhr")}</option>;
                   })}
                 </select>
               </div>
@@ -246,7 +247,7 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
             <div style={{ background: "#FFF8E1", borderRadius: 12, padding: "14px 16px", display: "flex", gap: 10, marginBottom: 20 }}>
               <div style={{ width: 28, height: 28, borderRadius: 14, background: "#FFD54F", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 }}>!</div>
               <div style={{ fontSize: 13, color: "#666", lineHeight: 1.5 }}>
-                <strong>Wichtig:</strong> {REGISTER_RULES_HINT}
+                <strong>{t("register.important", null, "Wichtig:")}</strong> {REGISTER_RULES_HINT}
               </div>
             </div>
             <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, color: "#555", cursor: "pointer" }}>
@@ -259,7 +260,7 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
           {step > 0 && (
             <button onClick={function () { setStep(step - 1); }} style={{ padding: "14px 24px", borderRadius: 12, border: "1.5px solid #ddd", background: "#fff", color: "#555", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
-              Zurueck
+              {t("register.back", null, "Zurück")}
             </button>
           )}
           <button
@@ -269,7 +270,7 @@ export default function RegisterScreen({ onRegistered, editMode, createEditSecre
             }}
             style={{ flex: 1, padding: "14px", borderRadius: 12, border: "none", background: (submitting || (step === 0 && !form.address.trim())) ? "#aaa" : "var(--COLOR-1)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: (submitting || (step === 0 && !form.address.trim())) ? "not-allowed" : "pointer", boxShadow: "0 4px 12px rgba(16,171,72,0.25)" }}
           >
-            {submitting ? "Wird gesendet…" : step < 2 ? "Weiter" : isEditing ? "Aenderungen speichern" : "Jetzt anmelden"}
+            {submitting ? t("register.submit.loading", null, "Wird gesendet…") : step < 2 ? t("register.submit.next", null, "Weiter") : isEditing ? t("register.submit.save", null, "Änderungen speichern") : t("register.submit.create", null, "Jetzt anmelden")}
           </button>
         </div>
       </div>

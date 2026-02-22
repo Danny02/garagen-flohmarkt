@@ -23,9 +23,9 @@ export const APP_CONFIG = {
         icon: "S",
         legendLabel: "Spielzeug",
       },
-      { name: "Buecher", color: "#0093FC", icon: "B", legendLabel: "Buecher" },
+      { name: "Bücher", color: "#0093FC", icon: "B", legendLabel: "Bücher" },
       { name: "Medien", color: "#0093FC", icon: "M", legendLabel: "Medien" },
-      { name: "Moebel", color: "#009DA9", icon: "M", legendLabel: "Moebel" },
+      { name: "Möbel", color: "#009DA9", icon: "M", legendLabel: "Möbel" },
       {
         name: "Haushalt",
         color: "#009DA9",
@@ -61,22 +61,22 @@ export const APP_CONFIG = {
     },
     legendCategories: [
       "Kindersachen",
-      "Buecher",
-      "Moebel",
+      "Bücher",
+      "Möbel",
       "Vintage",
       "Kleidung",
       "Elektronik",
     ],
   },
   home: {
-    title: "Garagenflohmarkt Zirndorf",
+    title: "Zirndorfer Garagen-Flohmarkt",
     subtitle:
-      "Zirndorfer oeffnen Garagen, Hoefe und Gaerten - von Buergern fuer Buerger.",
+      "Zirndorfer öffnen Garagen, Höfe und Gärten - von Bürgern für Bürger.",
     steps: [
       {
         num: "1",
         title: "Anmelden",
-        text: "Online in 2 Minuten - Adresse eingeben, Kategorien waehlen, fertig.",
+        text: "Online in 2 Minuten - Adresse eingeben, Kategorien wählen, fertig.",
       },
       {
         num: "2",
@@ -86,11 +86,11 @@ export const APP_CONFIG = {
       {
         num: "3",
         title: "Verkaufen",
-        text: "Am Flohmarkttag oeffnest du Garage, Hof oder Garten fuer Besucher.",
+        text: "Am Flohmarkttag öffnest du Garage, Hof oder Garten für Besucher.",
       },
       {
         num: "4",
-        title: "Stoebern",
+        title: "Stöbern",
         text: "Besucher filtern nach Kategorie und finden gezielt, was sie suchen.",
       },
     ],
@@ -105,45 +105,45 @@ export const APP_CONFIG = {
     timeOptionsFrom: ["09:00", "10:00", "11:00"],
     timeOptionsTo: ["14:00", "15:00", "16:00"],
     rulesHint:
-      "Der Verkauf findet auf deinem eigenen Grundstueck statt. Es duerfen nur gebrauchte Gegenstaende verkauft werden. Kein Alkoholausschank, keine Musik.",
+      "Der Verkauf findet auf deinem eigenen Grundstück statt. Es dürfen nur gebrauchte Gegenstände verkauft werden. Kein Alkoholausschank, keine Musik.",
     agreementLabel: "Ich habe die Spielregeln gelesen und bin einverstanden.",
   },
   info: {
     dos: [
-      "Nur gebrauchte Gegenstaende aus Privatbesitz",
-      "Nur auf eigenem Grundstueck (Garage, Hof, Garten)",
-      "Kostenlose Teilnahme fuer Verkaeufer und Besucher",
+      "Nur gebrauchte Gegenstände aus Privatbesitz",
+      "Nur auf eigenem Grundstück (Garage, Hof, Garten)",
+      "Kostenlose Teilnahme für Verkäufer und Besucher",
     ],
     donts: [
       "Kein gewerblicher Verkauf, keine Neuware",
       "Kein Alkoholausschank",
       "Keine laute Musik (GEMA-pflichtig)",
-      "Keine Staende auf oeffentlichen Gehwegen",
+      "Keine Stände auf öffentlichen Gehwegen",
     ],
     faq: [
       {
         q: "Brauche ich eine Genehmigung?",
-        a: "Nein. Solange du auf deinem eigenen Grundstueck verkaufst und nur gebrauchte Gegenstaende anbietest, ist keine Genehmigung noetig.",
+        a: "Nein. Solange du auf deinem eigenen Grundstück verkaufst und nur gebrauchte Gegenstände anbietest, ist keine Genehmigung nötig.",
       },
       {
         q: "Was darf ich verkaufen?",
-        a: "Nur gebrauchte Gegenstaende aus Privatbesitz - Kleidung, Buecher, Spielzeug, Moebel, Haushaltswaren etc. Neuware und gewerblicher Verkauf sind nicht erlaubt.",
+        a: "Nur gebrauchte Gegenstände aus Privatbesitz - Kleidung, Bücher, Spielzeug, Möbel, Haushaltswaren etc. Neuware und gewerblicher Verkauf sind nicht erlaubt.",
       },
       {
         q: "Was wenn es regnet?",
-        a: "Bei schlechtem Wetter kannst du deinen Stand kurzfristig absagen - einfach ueber den Bearbeitungs-Link in deiner Bestaetigungsmail.",
+        a: "Bei schlechtem Wetter kannst du deinen Stand kurzfristig absagen - einfach über den Bearbeitungs-Link in deiner Bestätigungsmail.",
       },
       {
         q: "Kostet die Teilnahme etwas?",
-        a: "Nein, die Teilnahme ist komplett kostenlos - sowohl fuer Verkaeufer als auch fuer Besucher.",
+        a: "Nein, die Teilnahme ist komplett kostenlos - sowohl für Verkäufer als auch für Besucher.",
       },
       {
         q: "Wer organisiert den Flohmarkt?",
-        a: "Der Garagenflohmarkt wird ehrenamtlich von Zirndorfer Buergern organisiert. Die digitale Plattform wird von Digitales Zirndorf betrieben.",
+        a: "Der Garagenflohmarkt wird ehrenamtlich von Zirndorfer Bürgern organisiert. Die digitale Plattform wird von Digitales Zirndorf betrieben.",
       },
       {
         q: "Darf ich auf dem Gehweg stehen?",
-        a: "Nein, der Verkauf muss auf deinem privaten Grundstueck stattfinden (Garage, Hof, Einfahrt, Garten).",
+        a: "Nein, der Verkauf muss auf deinem privaten Grundstück stattfinden (Garage, Hof, Einfahrt, Garten).",
       },
     ],
     contact: {
@@ -151,7 +151,7 @@ export const APP_CONFIG = {
       email: "flohmarkt@digitales-zirndorf.de",
       web: "digitales-zirndorf.de",
       footer:
-        "Eine ehrenamtliche Initiative von Buergern fuer Buerger. Powered by Digitales Zirndorf.",
+        "Eine ehrenamtliche Initiative von Bürgern für Bürger. Powered by Digitales Zirndorf.",
     },
   },
 };

@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { EVENT_DATE, EVENT_TIME, EVENT_AREA, EVENT_BADGE_LABEL, INFO_DOS, INFO_DONTS, INFO_FAQ, INFO_CONTACT } from "../../constants.js";
 import Header from "../ui/Header.jsx";
+import { t } from "../../i18n.js";
 
 export default function InfoScreen({ layout }) {
   const [openFaq, setOpenFaq] = useState(null);
 
   return (
     <div>
-      <Header title="Infos und FAQ" subtitle="Alles was du wissen musst" layout={layout} />
+      <Header title={t("info.title", null, "Infos und FAQ")} subtitle={t("info.subtitle", null, "Alles was du wissen musst")} layout={layout} />
 
       <div style={{ maxWidth: layout.isDesktop ? 1080 : layout.isTablet ? 820 : "100%", margin: "0 auto" }}>
         <div style={{ padding: "16px 16px 4px" }}>
@@ -21,7 +22,7 @@ export default function InfoScreen({ layout }) {
         </div>
 
         <div style={{ padding: "16px 16px 4px" }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--COLOR-1)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>Dos</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--COLOR-1)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>{t("info.dos", null, "Dos")}</h3>
           <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #eee", overflow: "hidden" }}>
             {INFO_DOS.map(function (item, i) {
               return (
@@ -37,7 +38,7 @@ export default function InfoScreen({ layout }) {
         </div>
 
         <div style={{ padding: "16px 16px 4px" }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--COLOR-1)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>Donts</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--COLOR-1)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>{t("info.donts", null, "Donts")}</h3>
           <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #eee", overflow: "hidden" }}>
             {INFO_DONTS.map(function (item, i) {
               return (
@@ -53,7 +54,7 @@ export default function InfoScreen({ layout }) {
         </div>
 
         <div style={{ padding: "20px 16px 4px" }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--COLOR-1)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>Haeufige Fragen</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--COLOR-1)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>{t("info.faq", null, "Häufige Fragen")}</h3>
           {INFO_FAQ.map(function (faq, i) {
             const isOpen = openFaq === i;
             return (
@@ -74,12 +75,12 @@ export default function InfoScreen({ layout }) {
         </div>
 
         <div style={{ padding: "20px 16px 100px" }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--COLOR-1)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>Kontakt</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--COLOR-1)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>{t("info.contact", null, "Kontakt")}</h3>
           <div style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", border: "1px solid #eee" }}>
             <div style={{ fontSize: 14, color: "#444", lineHeight: 1.8 }}>
               <strong>{INFO_CONTACT.orgName}</strong>
               <br />
-              {"E-Mail: " + INFO_CONTACT.email}
+              {t("info.mail", null, "E-Mail") + ": " + INFO_CONTACT.email}
               <br />
               {"Web: " + INFO_CONTACT.web}
               <br /><br />

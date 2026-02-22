@@ -19,7 +19,7 @@ export async function registerPasskey(standId, editSecret, accountName) {
   const cred = await navigator.credentials.create({
     publicKey: {
       challenge: b64urlDec(challenge),
-      rp: { name: "Garagenflohmarkt Zirndorf", id: location.hostname },
+      rp: { name: "Zirndorfer Garagen-Flohmarkt", id: location.hostname },
       user: {
         id: new TextEncoder().encode(standId),
         name: normalizedAccountName,

@@ -1,7 +1,7 @@
 {
-    "name": "Garagenflohmarkt Zirndorf",
-    "short_name": "Garagenflohmarkt",
-    "description": "Garagenflohmarkt Zirndorf - Staende entdecken und anmelden.",
+    "name": "Zirndorfer Garagen-Flohmarkt",
+    "short_name": "Garagen-Flohmarkt",
+    "description": "Zirndorfer Garagen-Flohmarkt - Stände entdecken und anmelden.",
     "lang": "de",
     "start_url": "/",
     "scope": "/",
