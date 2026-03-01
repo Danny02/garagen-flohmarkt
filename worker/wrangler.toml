@@ -10,7 +10,7 @@ binding = "GARAGEN_KV"
 id      = "ffffffffffffffffffffffffffffffff"
 
 [vars]
-ALLOWED_ORIGINS = "http://localhost:5173"
+ALLOWED_ORIGINS = "http://localhost,http://localhost:5173"
 
 # ── Production environment ───────────────────────────────────────────────────
 [env.production]
