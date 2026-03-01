@@ -29,6 +29,27 @@ npm run dev
 
 Open http://localhost:5173
 
+### Frontend UI tests (Playwright)
+
+```bash
+cd frontend
+npm install
+npm run e2e:install
+npm run e2e
+```
+
+Useful variants:
+
+```bash
+npm run e2e:ui
+npm run e2e:headed
+npm run e2e:debug
+```
+
+Notes:
+- E2E specs live in `frontend/e2e` and use mocked `/api/*` responses for stable UI flows.
+- Reports and artifacts are generated under `frontend/playwright-report` and `frontend/test-results` (gitignored).
+
 ### 2 – Full app locally (Frontend + Worker)
 
 ```bash

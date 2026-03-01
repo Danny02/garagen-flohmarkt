@@ -5,6 +5,9 @@ node_modules/
 frontend/dist/
 frontend/dev-dist/
 frontend/.vite/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
 
 # Wrangler
 worker/.wrangler/
