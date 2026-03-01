@@ -34,7 +34,12 @@ jobs:
           cache-dependency-path: "**/package-lock.json"
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
 
       - name: Run tests
         run: npm test
@@ -57,7 +62,12 @@ jobs:
           cache-dependency-path: "**/package-lock.json"
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
 
       - name: Run tests
         run: npm test
@@ -81,7 +91,12 @@ jobs:
           cache-dependency-path: "**/package-lock.json"
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
 
       - name: Deploy Worker
         run: npx wrangler deploy --env production
@@ -108,7 +123,12 @@ jobs:
           cache-dependency-path: "**/package-lock.json"
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
 
       - name: Build
         run: npm run build
