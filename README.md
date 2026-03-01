@@ -125,3 +125,14 @@ Add these secrets in **Settings → Secrets and variables → Actions**:
 | `WORKER_URL` | Full Worker URL injected into the frontend build |
 
 Push to `main` → CI builds → Worker deploys → Frontend deploys to Cloudflare Pages.
+
+## License
+
+This project is licensed under **GNU Affero General Public License v3.0 or later**.
+
+- SPDX identifier: `AGPL-3.0-or-later`
+- Full license text: [LICENSE](LICENSE)
+- Commercial services (e.g., hosting, setup, maintenance, support contracts) are allowed.
+- If you run a modified version for users over a network, you must provide the corresponding source code of that modified version under AGPL terms.
+
+Contributions are welcome and are accepted under the same AGPL-3.0-or-later license.
