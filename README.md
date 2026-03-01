@@ -56,8 +56,7 @@ npm run kv:create
 ```
 
 Copy the returned namespace ID to:
-- `worker/wrangler.toml` (`id = "REPLACE_WITH_KV_NAMESPACE_ID"`) for manual deploys
-- GitHub secret `CLOUDFLARE_KV_NAMESPACE_ID` for CI deploys
+- `worker/wrangler.toml` in `[[env.production.kv_namespaces]]`
 
 ## API reference
 
@@ -102,7 +101,6 @@ Add these secrets in **Settings → Secrets and variables → Actions**:
 |--------|-------------|
 | `CLOUDFLARE_API_TOKEN` | CF API token (Workers + Pages + KV Edit) |
 | `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID |
-| `CLOUDFLARE_KV_NAMESPACE_ID` | KV namespace ID created by `npm run kv:create` |
 | `WORKER_URL` | Full Worker URL injected into the frontend build |
 
 Push to `main` → CI builds → Worker deploys → Frontend deploys to Cloudflare Pages.
